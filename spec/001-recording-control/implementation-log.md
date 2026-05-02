@@ -45,3 +45,27 @@ Completed the server domain recording module.
 - start/stop eligibility guards
 - transition helpers for start, stop, and failure paths
 
+## Session 6
+
+Defined the recording repository port in the application layer.
+
+- `findRecording`
+- `saveRecording`
+- grouped repository capability types under the recording control module
+
+## Session 7
+
+Implemented the recording read application service.
+
+- application-layer service that returns the current recording state
+- repository access stays behind the service boundary
+
+## Session 8
+
+Implemented the recording command application service.
+
+- validates start and stop commands against current recording state
+- persists transitional and final recording states
+- coordinates OBS start/stop operations through application ports
+- returns structured command results
+

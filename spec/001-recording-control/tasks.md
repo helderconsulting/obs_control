@@ -48,10 +48,10 @@ Dependencies:
 
 ## Phase 4: Client UI
 
-- [ ] Build the recording page UI in `client/src/routes`.
-- [ ] Fetch the bootstrap recording state from `GET /recording` on page load.
-- [ ] Render start and stop controls based on the current recording state.
-- [ ] Display the current recording status and filename when available.
+- [x] Build the recording page UI in `client/src/routes`.
+- [x] Fetch the bootstrap recording state from `GET /recording` on page load.
+- [x] Render start and stop controls based on the current recording state.
+- [x] Display the current recording status and filename when available.
 - [ ] Connect the client to the websocket gateway and apply incoming recording events.
 - [ ] Show success and error feedback in the UI using visible accessible states.
 

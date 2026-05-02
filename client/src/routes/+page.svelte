@@ -3,19 +3,147 @@
 </svelte:head>
 
 <script lang="ts">
-  const status = 'Idle';
+  import { onMount } from 'svelte';
+  import type { Recording } from '../../../../shared/recording.js';
+  import { fetchRecording } from '$lib/api/recording.js';
+
+  let recording: Recording = {
+    status: 'idle',
+  };
+  let isLoading = true;
+
+  const statusLabelByStatus: Record<Recording['status'], string> = {
+    idle: 'Idle',
+    starting: 'Starting',
+    recording: 'Recording',
+    stopping: 'Stopping',
+    error: 'Error',
+  };
+
+  const loadRecording = async (): Promise<void> => {
+    isLoading = true;
+
+    try {
+      const result = await fetchRecording();
+
+      if (result.ok) {
+        recording = result.recording;
+        return;
+      }
+
+      recording = {
+        status: 'error',
+        message: result.error.message,
+      };
+    } catch {
+      recording = {
+        status: 'error',
+        message: 'Failed to load recording state.',
+      };
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  onMount(() => {
+    void loadRecording();
+  });
+
+  const currentFilename =
+    recording.status === 'recording' && recording.currentFilename !== null
+      ? recording.currentFilename
+      : 'No active recording file';
+  const statusLabel = statusLabelByStatus[recording.status];
+  const canStart = recording.status === 'idle' || recording.status === 'error';
+  const canStop = recording.status === 'recording';
+  const showAlert = recording.status === 'error';
+  const alertMessage = recording.status === 'error' ? recording.message : '';
+  const statusDotClass =
+    recording.status === 'recording'
+      ? 'bg-orange-500 shadow-[0_0_0_6px_rgba(249,115,22,0.18)]'
+      : 'bg-slate-400 shadow-[0_0_0_6px_rgba(148,163,184,0.12)]';
 </script>
 
-<main>
-  <h1>Recording Control</h1>
+<svelte:body
+  class="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(251,146,60,0.20),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(96,165,250,0.18),transparent_30%),linear-gradient(160deg,#0d1528_0%,#101a30_55%,#152441_100%)] text-slate-100"
+/>
 
-  <section aria-label="Recording status">
-    <p role="status">{status}</p>
-    <p>Current filename: not recording</p>
+<main class="mx-auto grid min-h-screen max-w-6xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-12">
+  <section class="grid gap-6 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.25)] backdrop-blur-xl lg:grid-cols-[1.6fr_0.9fr] lg:p-7">
+    <div class="grid content-start gap-4">
+      <p class="m-0 text-[0.74rem] uppercase tracking-[0.18em] text-amber-300">OBS Studio</p>
+      <h1 class="m-0 text-[clamp(2.4rem,6vw,4.6rem)] font-bold leading-[0.94] tracking-[-0.04em]">
+        Recording Control
+      </h1>
+      <p class="m-0 max-w-[46ch] text-base leading-7 text-slate-200/80">
+        Start and stop local recording from one focused control surface, with live status and
+        clear operator feedback.
+      </p>
+    </div>
+
+    <div
+      aria-label="Recording status"
+      class="grid gap-3 rounded-[22px] bg-white/[0.05] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+    >
+      <div class="flex items-center gap-2.5">
+        <span class={`h-3 w-3 rounded-full ${statusDotClass}`}></span>
+        <p class="m-0 text-[0.72rem] uppercase tracking-[0.12em] text-slate-300/65">
+          Recorder status
+        </p>
+        {#if isLoading}
+          <span class="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[0.68rem] uppercase tracking-[0.1em] text-slate-300/60">
+            Loading
+          </span>
+        {/if}
+      </div>
+      <p
+        class="m-0 text-[clamp(1.8rem,4vw,2.6rem)] font-bold tracking-[-0.04em]"
+        role="status"
+      >
+        {statusLabel}
+      </p>
+      <p class="m-0 text-[0.72rem] uppercase tracking-[0.12em] text-slate-300/65">
+        Current filename
+      </p>
+      <p class="m-0 break-all leading-6 text-slate-100/90">{currentFilename}</p>
+    </div>
   </section>
 
-  <section aria-label="Recording actions">
-    <button type="button">Start recording</button>
-    <button type="button">Stop recording</button>
+  <section
+    aria-label="Recording actions"
+    class="grid gap-5 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.25)] backdrop-blur-xl lg:p-7"
+  >
+    <div class="grid gap-2">
+      <h2 class="m-0 text-[1.4rem] font-semibold tracking-[-0.03em]">Actions</h2>
+      <p class="m-0 leading-6 text-slate-200/75">
+        Use the controls below to manage the current OBS recording session.
+      </p>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+      <button
+        class="min-h-[124px] rounded-[22px] bg-gradient-to-br from-amber-300 to-orange-400 p-5 text-left text-[1.05rem] font-bold text-slate-950 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(0,0,0,0.28)] focus-visible:-translate-y-0.5 focus-visible:shadow-[0_18px_40px_rgba(0,0,0,0.28)] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+        type="button"
+        disabled={!canStart}
+      >
+        Start recording
+      </button>
+      <button
+        class="min-h-[124px] rounded-[22px] bg-gradient-to-br from-sky-300 to-indigo-400 p-5 text-left text-[1.05rem] font-bold text-slate-950 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(0,0,0,0.28)] focus-visible:-translate-y-0.5 focus-visible:shadow-[0_18px_40px_rgba(0,0,0,0.28)] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+        type="button"
+        disabled={!canStop}
+      >
+        Stop recording
+      </button>
+    </div>
+
+    {#if showAlert}
+      <p
+        class="m-0 rounded-2xl border border-orange-400/30 bg-orange-500/15 px-4 py-3 text-orange-100"
+        role="alert"
+      >
+        {alertMessage}
+      </p>
+    {/if}
   </section>
 </main>

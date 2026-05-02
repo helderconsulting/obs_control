@@ -154,3 +154,21 @@ Completed the backend logging pass.
 - added SQLite repository logging for open, read, missing state, and save operations
 - added OBS adapter logging for connect, command completion, and disconnect
 - added component-scoped child loggers in the server composition root
+
+## Session 18
+
+Built the recording page UI.
+
+- replaced the placeholder page with a styled recording control view
+- added a status panel, filename display, and start/stop action cards
+- kept the page responsive for desktop and mobile
+- left the page ready for backend bootstrap and websocket wiring
+
+## Session 19
+
+Connected the recording page to the bootstrap read endpoint.
+
+- added a client API helper for `GET /recording`
+- load the recording state on mount
+- update the page status, filename, and button availability from backend data
+- surface bootstrap failures as a visible error state

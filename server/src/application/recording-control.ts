@@ -11,8 +11,13 @@ import {
   canStartRecording,
   canStopRecording,
 } from '../domain/recording.js';
+import {
+  RecordingNotFoundError,
+  RecordingReadError,
+} from './recording-control-errors.js';
+import type { AppLogger } from '../infrastructure/recording-logger.js';
 
-export type FindRecording = () => Promise<Recording>;
+export type FindRecording = () => Promise<Recording | undefined>;
 
 export type SaveRecording = (recording: Recording) => Promise<void>;
 
@@ -21,16 +26,39 @@ export type RecordingRepository = {
   saveRecording: SaveRecording;
 };
 
-export type ReadRecordingService = () => Promise<Recording>;
-
 export type ReadRecordingServiceDeps = {
   recordingRepository: RecordingRepository;
+  logger: AppLogger;
 };
+
+export type ReadRecordingService = () => Promise<Recording>;
 
 export const createReadRecordingService = (
   deps: ReadRecordingServiceDeps,
 ): ReadRecordingService => {
-  return async () => deps.recordingRepository.findRecording();
+  return async () => {
+    try {
+      const recording = await deps.recordingRepository.findRecording();
+
+      if (recording === undefined) {
+        deps.logger.warn('Recording read model was missing.');
+        throw new RecordingNotFoundError();
+      }
+
+      deps.logger.debug('Recording read model loaded.');
+      return recording;
+    } catch (error: unknown) {
+      if (error instanceof RecordingNotFoundError) {
+        throw error;
+      }
+
+      deps.logger.error({ error }, 'Failed to fetch recording.');
+      throw new RecordingReadError(
+        error instanceof Error ? error.message : 'Failed to fetch recording.',
+        { cause: error },
+      );
+    }
+  };
 };
 
 export type StartObsRecording = () => Promise<{ currentFilename: string | null }>;
@@ -56,6 +84,10 @@ const issueStartCommand = async (
   deps: IssueRecordingCommandServiceDeps,
 ): Promise<IssueRecordingCommandResult> => {
   const currentRecording = await deps.recordingRepository.findRecording();
+
+  if (currentRecording === undefined) {
+    throw new RecordingNotFoundError();
+  }
 
   if (!canStartRecording(currentRecording)) {
     const recording = applyRecordingFailed('Recording is already active.');
@@ -94,6 +126,10 @@ const issueStopCommand = async (
   deps: IssueRecordingCommandServiceDeps,
 ): Promise<IssueRecordingCommandResult> => {
   const currentRecording = await deps.recordingRepository.findRecording();
+
+  if (currentRecording === undefined) {
+    throw new RecordingNotFoundError();
+  }
 
   if (!canStopRecording(currentRecording)) {
     const recording = applyRecordingFailed('Recording is not active.');

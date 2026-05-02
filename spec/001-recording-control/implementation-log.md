@@ -86,3 +86,41 @@ Replaced the repository adapter with filesystem-backed storage under `.recording
 - persists the recording status and OBS filename reference explicitly
 - creates the `.recordings/` directory before opening the database
 - falls back to idle when no row exists yet
+
+## Session 11
+
+Implemented the OBS recording adapter.
+
+- wraps `obs-websocket-js`
+- exposes start/stop recording operations through an infrastructure adapter
+- reads `recordingFilename` from the OBS start response when available
+- disconnects the OBS client after each call
+
+## Session 12
+
+Implemented the Hono controller for the recording read endpoint.
+
+- `GET /recording`
+- controller depends on the application read service
+- no direct repository access from Hono
+- explicit 404 and 500 responses for missing or failed reads
+- Hono controller typed with an explicit environment generic
+
+## Session 13
+
+Aligned the read path with the repository/application error-handling style.
+
+- added a custom application error class for recording read failures
+- added a dedicated response mapper for recording errors
+- controller maps the custom error to a safe HTTP response
+- removed the incorrect null/404 branch in favor of explicit error mapping
+
+## Session 14
+
+Refined the read path and logging behavior.
+
+- added a `RecordingNotFoundError` for undefined recording reads
+- mapped not-found errors to HTTP 404
+- added a structured Pino logger module
+- added application-layer logging for successful reads, missing state, and read failures
+- made the command flow fail explicitly when the repository returns `undefined`

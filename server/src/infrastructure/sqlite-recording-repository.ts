@@ -38,11 +38,7 @@ const createRecordingDatabase = (): DatabaseSync => {
   return database;
 };
 
-const toRecording = (row: RecordingRow | undefined): Recording => {
-  if (row === undefined) {
-    return createIdleRecording();
-  }
-
+const toRecording = (row: RecordingRow): Recording => {
   switch (row.status) {
     case 'recording':
       return createRecording(row.current_filename);
@@ -112,14 +108,14 @@ export const createSqliteRecordingRepository = (
     return database;
   };
 
-  const hydrate = async (): Promise<Recording> => {
+  const hydrate = async (): Promise<Recording | undefined> => {
     const currentDatabase = await openDatabase();
     const row = currentDatabase
       .prepare('SELECT status, current_filename, message FROM recording_state WHERE id = 1')
       .get() as RecordingRow | undefined;
 
     if (row === undefined) {
-      return createIdleRecording();
+      return undefined;
     }
 
     return toRecording(row);

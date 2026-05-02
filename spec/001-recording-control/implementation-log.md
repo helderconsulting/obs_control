@@ -135,3 +135,13 @@ Implemented the recording websocket gateway.
 - broadcasts recording events to all connected clients
 - returns safe websocket error messages for invalid requests and command failures
 - adds logging for websocket connections, message handling, and broadcasts
+
+## Session 16
+
+Added the server composition root.
+
+- composes the logger, SQLite repository, OBS adapter, read service, command service, controller, and websocket gateway
+- mounts HTTP and websocket routes on a single Hono app
+- adds a health endpoint
+- exposes `createServerApp()` and `startServer()`
+- reads server and OBS configuration from environment variables

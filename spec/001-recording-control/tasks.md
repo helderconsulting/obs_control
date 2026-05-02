@@ -37,7 +37,7 @@ Dependencies:
 - [x] Implement the OBS recording adapter that starts and stops recording.
 - [x] Implement the Hono controller for `GET /recording` so it calls the application read service.
 - [x] Implement the websocket gateway for recording commands and broadcast events.
-- [ ] Wire controller, application services, repository, and OBS adapter together in the server composition root.
+- [x] Wire controller, application services, repository, and OBS adapter together in the server composition root.
 - [ ] Add backend logging around command attempts, success, and failure.
 
 Dependencies:

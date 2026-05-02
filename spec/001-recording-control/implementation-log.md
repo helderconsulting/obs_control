@@ -11,3 +11,11 @@ Notes:
 - The implementation will keep client and server code separated.
 - Server code will keep the `domain`, `application`, and `infrastructure` folders.
 
+## Session 2
+
+Completed the shared type module for recording control.
+
+- added recording state types
+- added recording command types
+- added recording event types
+

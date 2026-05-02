@@ -36,7 +36,7 @@ server/
       recording-controller.ts
       recording-websocket-gateway.ts
       obs-recording-adapter.ts
-      recording-repository.ts
+      sqlite-recording-repository.ts
       recording-logger.ts
 ```
 

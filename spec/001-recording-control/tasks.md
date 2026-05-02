@@ -33,7 +33,7 @@ Dependencies:
 
 ## Phase 3: Server Infrastructure
 
-- [ ] Implement the recording repository infrastructure adapter.
+- [x] Implement the recording repository infrastructure adapter.
 - [ ] Implement the OBS recording adapter that starts and stops recording.
 - [ ] Implement the Hono controller for `GET /recording` so it calls the application read service.
 - [ ] Implement the websocket gateway for recording commands and broadcast events.

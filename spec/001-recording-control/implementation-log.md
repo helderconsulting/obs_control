@@ -69,3 +69,20 @@ Implemented the recording command application service.
 - coordinates OBS start/stop operations through application ports
 - returns structured command results
 
+## Session 9
+
+Implemented the in-memory recording repository adapter.
+
+- satisfies the repository port from the application layer
+- keeps the latest recording read model in memory
+- starts from idle by default
+
+## Session 10
+
+Replaced the repository adapter with filesystem-backed storage under `.recordings/`.
+
+- uses Node's built-in SQLite module
+- stores the recording state in `.recordings/recordings.db`
+- persists the recording status and OBS filename reference explicitly
+- creates the `.recordings/` directory before opening the database
+- falls back to idle when no row exists yet

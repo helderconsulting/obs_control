@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import type { Recording, RecordingCommand } from '../../../../shared/recording.js';
   import type { RecordingEvent } from '../../../../shared/recording.js';
-  import { fetchObsConnectionStatus, fetchRecording } from '$lib/api/recording.js';
+  import { fetchObsConnectionStatus, fetchRecording, fetchObsScenes } from '$lib/api/recording.js';
   import type { ObsConnectionStatus } from '$lib/api/recording.js';
   import { connectRecordingWebSocket } from '$lib/api/recording-websocket.js';
 
@@ -17,6 +17,7 @@
   let isLoading = true;
   let isSocketConnected = false;
   let connectionError = '';
+  let obsScenes = [];
   let obsConnectionStatus: ObsConnectionStatus = {
     status: 'disconnected',
     url: 'Unavailable',
@@ -77,6 +78,14 @@
     }
   };
 
+  const loadObsScenes = async (): Promise<void> => {
+    try {
+      obsScenes = await fetchObsScenes();
+    } catch {
+      obsScenes = [];
+    }
+  };
+
   const applyRecordingEvent = (event: RecordingEvent): void => {
     if (event.type === 'recording.started') {
       recording = {
@@ -102,6 +111,17 @@
       lastRecordingFilename: event.delta.lastRecordingFilename,
     };
     connectionError = '';
+  };
+
+  const handleSwitchScene = (sceneName: string): void => {
+    if (sendCommand === null) {
+      connectionError = 'WebSocket connection is not available.';
+      return;
+    }
+    sendCommand({
+      type: 'recording.switch-scene',
+      sceneName,
+    });
   };
 
   const handleStartRecording = (): void => {
@@ -158,6 +178,7 @@
 
     void loadRecording();
     void loadObsConnectionStatus();
+    void loadObsScenes();
 
     return () => {
       sendCommand = null;
@@ -196,7 +217,7 @@
       ? 'bg-orange-500 shadow-[0_0_0_6px_rgba(249,115,22,0.18)]'
       : recording.status === 'starting' || recording.status === 'stopping'
         ? 'bg-sky-400 shadow-[0_0_0_6px_rgba(56,189,248,0.16)]'
-      : 'bg-slate-400 shadow-[0_0_0_6px_rgba(148,163,184,0.12)]';
+        : 'bg-slate-400 shadow-[0_0_0_6px_rgba(148,163,184,0.12)]';
   $: obsStatusDotClass =
     obsConnectionStatus.status === 'connected'
       ? 'bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.16)]'
@@ -269,6 +290,20 @@
         Use the controls below to manage the current OBS recording session.
       </p>
     </div>
+
+    {#if obsScenes.length > 0}
+      <div class="grid gap-2">
+        <label class="text-sm text-slate-300/65 uppercase tracking-[0.12em]">Scene</label>
+        <select
+          on:change={(e) => {handleSwitchScene((e.target as HTMLSelectElement).value)}}
+          class="rounded-[14px] border border-white/10 bg-slate-900 px-3 py-2 text-slate-100"
+        >
+          {#each obsScenes as scene}
+            <option value={scene}>{scene}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
 
     <div class="grid gap-4 md:grid-cols-2">
       <button

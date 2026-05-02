@@ -18,6 +18,7 @@ const databasePath = join(recordingsDirectory, 'recordings.db');
 
 type RecordingRow = {
   status: Recording['status'];
+  scene_name: string;
   last_recording_filename: string | null;
   message: string | null;
 };
@@ -26,40 +27,17 @@ const ensureRecordingsDirectory = async (): Promise<void> => {
   await mkdir(recordingsDirectory, { recursive: true });
 };
 
-type TableInfoRow = {
-  name: string;
-};
-
-const ensureRecordingFilenameColumn = (database: DatabaseSync): void => {
-  const columns = database.prepare('PRAGMA table_info(recording_state)').all() as TableInfoRow[];
-  const columnNames = new Set(columns.map((column) => column.name));
-
-  if (columnNames.has('last_recording_filename')) {
-    return;
-  }
-
-  database.exec('ALTER TABLE recording_state ADD COLUMN last_recording_filename TEXT;');
-
-  if (columnNames.has('current_filename')) {
-    database.exec(`
-      UPDATE recording_state
-      SET last_recording_filename = current_filename
-      WHERE last_recording_filename IS NULL;
-    `);
-  }
-};
-
 const createRecordingDatabase = (): DatabaseSync => {
   const database = new DatabaseSync(databasePath);
   database.exec(`
     CREATE TABLE IF NOT EXISTS recording_state (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       status TEXT NOT NULL,
+      scene_name TEXT,
       last_recording_filename TEXT,
       message TEXT
     ) STRICT;
   `);
-  ensureRecordingFilenameColumn(database);
 
   return database;
 };
@@ -67,10 +45,11 @@ const createRecordingDatabase = (): DatabaseSync => {
 const upsertRecordingRow = (database: DatabaseSync, recording: Recording): void => {
   const row = toRow(recording);
   const statement = database.prepare(`
-    INSERT INTO recording_state (id, status, last_recording_filename, message)
-    VALUES (1, @status, @last_recording_filename, @message)
+    INSERT INTO recording_state (id, status, scene_name, last_recording_filename, message)
+    VALUES (1, @status, @scene_name, @last_recording_filename, @message)
     ON CONFLICT(id) DO UPDATE SET
       status = excluded.status,
+      scene_name = excluded.scene_name,
       last_recording_filename = excluded.last_recording_filename,
       message = excluded.message
   `);
@@ -81,16 +60,20 @@ const upsertRecordingRow = (database: DatabaseSync, recording: Recording): void 
 const toRecording = (row: RecordingRow): Recording => {
   switch (row.status) {
     case 'recording':
-      return createRecording(row.last_recording_filename);
+      return createRecording(row.scene_name, row.last_recording_filename);
     case 'starting':
-      return createStartingRecording(row.last_recording_filename);
+      return createStartingRecording(row.scene_name, row.last_recording_filename);
     case 'stopping':
-      return createStoppingRecording(row.last_recording_filename);
+      return createStoppingRecording(row.scene_name, row.last_recording_filename);
     case 'error':
-      return createRecordingError(row.message ?? 'Recording failed.', row.last_recording_filename);
+      return createRecordingError(
+        row.message ?? 'Recording failed.',
+        row.scene_name,
+        row.last_recording_filename,
+      );
     case 'idle':
     default:
-      return createIdleRecordingWithFilename(row.last_recording_filename);
+      return createIdleRecordingWithFilename(row.scene_name, row.last_recording_filename);
   }
 };
 
@@ -98,6 +81,7 @@ const toRow = (recording: Recording): RecordingRow => {
   if (recording.status === 'error') {
     return {
       status: recording.status,
+      scene_name: '',
       last_recording_filename: recording.lastRecordingFilename,
       message: recording.message,
     };
@@ -105,6 +89,7 @@ const toRow = (recording: Recording): RecordingRow => {
 
   return {
     status: recording.status,
+    scene_name: recording.sceneName,
     last_recording_filename: recording.lastRecordingFilename,
     message: null,
   };
@@ -119,7 +104,7 @@ export type SqliteRecordingRepositoryDeps = {
 export const createSqliteRecordingRepository = (
   deps: SqliteRecordingRepositoryDeps,
 ): SqliteRecordingRepository => {
-  const initialRecording = deps.initialRecording ?? createIdleRecording();
+  const initialRecording = deps.initialRecording ?? createIdleRecording('');
   let database: DatabaseSync | null = null;
 
   const openDatabase = async (): Promise<DatabaseSync> => {
@@ -132,7 +117,9 @@ export const createSqliteRecordingRepository = (
     database = createRecordingDatabase();
 
     const persistedRow = database
-      .prepare('SELECT status, last_recording_filename, message FROM recording_state WHERE id = 1')
+      .prepare(
+        'SELECT status, scene_name, last_recording_filename, message FROM recording_state WHERE id = 1',
+      )
       .get() as RecordingRow | undefined;
 
     if (persistedRow === undefined) {
@@ -149,7 +136,9 @@ export const createSqliteRecordingRepository = (
   const hydrate = async (): Promise<Recording | undefined> => {
     const currentDatabase = await openDatabase();
     const row = currentDatabase
-      .prepare('SELECT status, last_recording_filename, message FROM recording_state WHERE id = 1')
+      .prepare(
+        'SELECT status, scene_name, last_recording_filename, message FROM recording_state WHERE id = 1',
+      )
       .get() as RecordingRow | undefined;
 
     if (row === undefined) {

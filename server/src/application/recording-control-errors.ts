@@ -24,3 +24,11 @@ export class RecordingNotFoundError extends RecordingControlError {
     super(message, details);
   }
 }
+
+export class RecordingUnknownCommandError extends RecordingControlError {
+  readonly code = 'recording.unknown_command' as const;
+
+  constructor(message = 'Command unknown.', details?: unknown) {
+    super(message, details);
+  }
+}

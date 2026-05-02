@@ -1,5 +1,6 @@
 import OBSWebSocket, { type OBSRequestTypes, type OBSResponseTypes } from 'obs-websocket-js';
 import type { AppLogger } from './recording-logger.js';
+import type { JSONObject } from 'hono/utils/types';
 
 export type StopObsRecordingResult = {
   recordingFilename: string | null;
@@ -13,6 +14,9 @@ export type StopRecording = () => Promise<StopObsRecordingResult>;
 export type CheckObsConnection = () => Promise<void>;
 export type GetObsConnectionStatus = () => ObsConnectionStatus;
 export type GetObsRecordingStatus = () => Promise<ObsRecordingStatus>;
+export type GetObsScenes = () => Promise<string[]>;
+export type GetActiveObsScene = () => Promise<string>;
+export type SwitchObsScene = (name: string) => Promise<void>;
 
 export type ObsConnectionStatus =
   | {
@@ -34,6 +38,9 @@ export type ObsRecordingAdapter = {
   getRecordingStatus: GetObsRecordingStatus;
   startRecording: StartRecording;
   stopRecording: StopRecording;
+  getScenes: GetObsScenes;
+  getActiveScene: GetActiveObsScene;
+  switchScene: SwitchObsScene;
 };
 
 export type ObsRecordingAdapterConfig = {
@@ -103,6 +110,10 @@ export const readRecordingFilename = (response: unknown): string | null => {
   const filename = (response as { outputPath?: unknown }).outputPath;
 
   return typeof filename === 'string' && filename.length > 0 ? filename : null;
+};
+
+export const readSceneNames = (response: { scenes: JSONObject[] }) => {
+  return response.scenes.map((s) => s.sceneName as string);
 };
 
 const createManagedObsConnection = (deps: ObsRecordingAdapterDeps): ManagedObsConnection => {
@@ -358,6 +369,48 @@ export const createStopRecording = (
   };
 };
 
+export const createGetActiveScene = (
+  connection: ManagedObsConnection,
+  logger: AppLogger,
+): GetActiveObsScene => {
+  return async () => {
+    logger.info('Fetching the active scene');
+    const response = await connection.call('GetCurrentProgramScene');
+    logger.info({ sceneName: response.sceneName }, 'Active scene fetched');
+    return response.sceneName;
+  };
+};
+
+export const createGetScenes = (
+  connection: ManagedObsConnection,
+  logger: AppLogger,
+): GetObsScenes => {
+  return async () => {
+    logger.info('Fetching OBS scenes');
+    const response = await connection.call('GetSceneList');
+    const scenes = readSceneNames(response);
+    logger.info({ scenes }, 'OBS scenes fetched.');
+    return scenes;
+  };
+};
+
+export const createSwitchScene = (
+  connection: ManagedObsConnection,
+  logger: AppLogger,
+): SwitchObsScene => {
+  return async (name: string) => {
+    logger.info({ name }, 'Switching OBS scene');
+    if (!name) {
+      logger.warn('OBS scene switched with empty name');
+      return;
+    }
+    await connection.call('SetCurrentProgramScene', {
+      sceneName: name,
+    });
+    logger.info('OBS scene switched.');
+  };
+};
+
 export const createObsRecordingAdapter = (deps: ObsRecordingAdapterDeps): ObsRecordingAdapter => {
   const connection = createManagedObsConnection(deps);
   const checkConnection = createCheckConnection(connection, deps.logger);
@@ -365,6 +418,9 @@ export const createObsRecordingAdapter = (deps: ObsRecordingAdapterDeps): ObsRec
   const getRecordingStatus = createGetRecordingStatus(connection, deps.logger);
   const startRecording = createStartRecording(connection, deps.logger);
   const stopRecording = createStopRecording(connection, deps.logger);
+  const getScenes = createGetScenes(connection, deps.logger);
+  const switchScene = createSwitchScene(connection, deps.logger);
+  const getActiveScene = createGetActiveScene(connection, deps.logger);
 
   return {
     checkConnection,
@@ -372,5 +428,8 @@ export const createObsRecordingAdapter = (deps: ObsRecordingAdapterDeps): ObsRec
     getRecordingStatus,
     startRecording,
     stopRecording,
+    getScenes,
+    getActiveScene,
+    switchScene,
   };
 };

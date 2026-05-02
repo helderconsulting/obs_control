@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { ReadRecordingService } from '../application/recording-control.js';
 import { mapRecordingErrorToResponse } from './recording-error-response.js';
 import type { AppLogger } from './recording-logger.js';
-import type { GetObsConnectionStatus } from './obs-recording-adapter.js';
+import type { GetObsConnectionStatus, GetObsScenes } from './obs-recording-adapter.js';
 
 export type RecordingControllerEnv = {
   Bindings: Record<string, never>;
@@ -12,6 +12,7 @@ export type RecordingControllerEnv = {
 export type RecordingControllerDeps = {
   readRecording: ReadRecordingService;
   getObsConnectionStatus: GetObsConnectionStatus;
+  getObsScenes: GetObsScenes;
   logger: AppLogger;
 };
 
@@ -33,6 +34,25 @@ export const createRecordingController = (
       deps.logger.error(
         { error, status: response.status, code: response.body.error.code },
         'Failed to handle GET /recording request.',
+      );
+
+      return context.json(response.body, { status: response.status });
+    }
+  });
+
+  app.get('/obs/scenes', async (context) => {
+    deps.logger.debug('Handling GET /obs/scenes request.');
+
+    try {
+      const scenes = await deps.getObsScenes();
+      deps.logger.info({ scenes }, 'Handled GET /obs/scenes request.');
+
+      return context.json(scenes, 200);
+    } catch (error: unknown) {
+      const response = mapRecordingErrorToResponse(error);
+      deps.logger.error(
+        { error, status: response.status, code: response.body.error.code },
+        'Failed to handle GET /obs/scenes request.',
       );
 
       return context.json(response.body, { status: response.status });

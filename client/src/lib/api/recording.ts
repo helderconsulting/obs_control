@@ -95,3 +95,13 @@ export const fetchObsConnectionStatus = async (): Promise<ObsConnectionStatus> =
 
   return (await response.json()) as ObsConnectionStatus;
 };
+
+export const fetchObsScenes = async (): Promise<string[]> => {
+  const response = await fetch('/obs/scenes');
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch OBS scenes.');
+  }
+
+  return response.json();
+};

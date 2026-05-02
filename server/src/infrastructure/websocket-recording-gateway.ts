@@ -7,6 +7,7 @@ import type {
   RecordingCommand,
   RecordingEvent,
   RecordingFailedEvent,
+  RecordingSceneSwitchedEvent,
   RecordingStartedEvent,
   RecordingStoppedEvent,
 } from '../../../shared/recording.js';
@@ -20,6 +21,10 @@ const recordingCommandMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('recording.stop'),
+  }),
+  z.object({
+    type: z.literal('recording.switch-scene'),
+    sceneName: z.string(),
   }),
 ]);
 
@@ -101,6 +106,22 @@ const createRecordingStoppedEvent = (
   };
 };
 
+const createRecordingSceneSwitchedEvent = (
+  recording: Extract<Recording, { status: 'switching-scene' }>,
+): RecordingSceneSwitchedEvent => {
+  const occurredAt = new Date().toISOString();
+
+  return {
+    type: 'recording.scene-switched',
+    aggregate: 'recording',
+    occurredAt,
+    delta: {
+      status: 'scene-switched',
+      sceneName: recording.sceneName,
+    },
+  };
+};
+
 const createRecordingFailedEvent = (
   recording: Extract<Recording, { status: 'error' }>,
 ): RecordingFailedEvent => {
@@ -122,6 +143,10 @@ const createRecordingFailedEvent = (
 const createRecordingEvent = (recording: Recording): RecordingEvent | null => {
   if (recording.status === 'recording') {
     return createRecordingStartedEvent(recording);
+  }
+
+  if (recording.status === 'switching-scene') {
+    return createRecordingSceneSwitchedEvent(recording);
   }
 
   if (recording.status === 'error') {

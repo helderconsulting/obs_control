@@ -1,20 +1,30 @@
 export type RecordingIdle = {
   status: 'idle';
+  sceneName: string;
   lastRecordingFilename: string | null;
 };
 
 export type RecordingStarting = {
   status: 'starting';
+  sceneName: string;
   lastRecordingFilename: string | null;
 };
 
 export type RecordingActive = {
   status: 'recording';
+  sceneName: string;
   lastRecordingFilename: string | null;
 };
 
 export type RecordingStopping = {
   status: 'stopping';
+  sceneName: string;
+  lastRecordingFilename: string | null;
+};
+
+export type RecordingSceneSwitching = {
+  status: 'switching-scene';
+  sceneName: string;
   lastRecordingFilename: string | null;
 };
 
@@ -29,6 +39,7 @@ export type Recording =
   | RecordingStarting
   | RecordingActive
   | RecordingStopping
+  | RecordingSceneSwitching
   | RecordingError;
 
 export type StartRecordingCommand = {
@@ -39,7 +50,12 @@ export type StopRecordingCommand = {
   type: 'recording.stop';
 };
 
-export type RecordingCommand = StartRecordingCommand | StopRecordingCommand;
+export type SwitchSceneCommand = {
+  type: 'recording.switch-scene';
+  sceneName: string;
+};
+
+export type RecordingCommand = StartRecordingCommand | StopRecordingCommand | SwitchSceneCommand;
 
 export type RecordingStartedEvent = {
   type: 'recording.started';
@@ -61,6 +77,16 @@ export type RecordingStoppedEvent = {
   };
 };
 
+export type RecordingSceneSwitchedEvent = {
+  type: 'recording.scene-switched';
+  aggregate: 'recording';
+  occuredAt: string;
+  delta: {
+    status: 'switching-scene';
+    sceneName: string;
+  };
+};
+
 export type RecordingFailedEvent = {
   type: 'recording.failed';
   aggregate: 'recording';
@@ -72,4 +98,8 @@ export type RecordingFailedEvent = {
   };
 };
 
-export type RecordingEvent = RecordingStartedEvent | RecordingStoppedEvent | RecordingFailedEvent;
+export type RecordingEvent =
+  | RecordingStartedEvent
+  | RecordingStoppedEvent
+  | RecordingFailedEvent
+  | RecordingSceneSwitchedEvent;

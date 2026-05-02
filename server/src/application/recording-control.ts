@@ -1,17 +1,24 @@
 import type { Recording, RecordingCommand } from '../../../shared/recording.js';
 import {
   applyRecordingFailed,
+  applyRecordingSceneSwitch,
   applyRecordingStarted,
   applyRecordingStopped,
   beginStartingRecording,
   beginStoppingRecording,
   canStartRecording,
   canStopRecording,
+  canSwitchScene,
   createIdleRecordingWithFilename,
   createRecording,
 } from '../domain/recording.js';
-import { RecordingNotFoundError, RecordingReadError } from './recording-control-errors.js';
+import {
+  RecordingNotFoundError,
+  RecordingReadError,
+  RecordingUnknownCommandError,
+} from './recording-control-errors.js';
 import type { AppLogger } from '../infrastructure/recording-logger.js';
+import type { GetActiveObsScene, SwitchObsScene } from '../infrastructure/obs-recording-adapter.js';
 
 export type FindRecording = () => Promise<Recording | undefined>;
 
@@ -47,8 +54,11 @@ export const createReadRecordingService = (
       try {
         const obsRecordingStatus = await deps.getObsRecordingStatus();
         const normalizedRecording = obsRecordingStatus.outputActive
-          ? createRecording(storedRecording.lastRecordingFilename)
-          : createIdleRecordingWithFilename(storedRecording.lastRecordingFilename);
+          ? createRecording(storedRecording.sceneName, storedRecording.lastRecordingFilename)
+          : createIdleRecordingWithFilename(
+              storedRecording.sceneName,
+              storedRecording.lastRecordingFilename,
+            );
 
         recording =
           storedRecording.status === normalizedRecording.status
@@ -106,6 +116,8 @@ export type IssueRecordingCommandServiceDeps = {
   recordingRepository: RecordingRepository;
   startObsRecording: StartObsRecording;
   stopObsRecording: StopObsRecording;
+  switchObsScene: SwitchObsScene;
+  getActiveObsScene: GetActiveObsScene;
   logger: AppLogger;
 };
 
@@ -138,6 +150,8 @@ const issueStartCommand = async (
     };
   }
 
+  const activeScene = await deps.getActiveObsScene();
+  currentRecording.sceneName = activeScene;
   const startingRecording = beginStartingRecording(currentRecording);
   deps.logger.debug('Persisting starting recording state.');
   await deps.recordingRepository.saveRecording(startingRecording);
@@ -198,7 +212,7 @@ const issueStopCommand = async (
   try {
     deps.logger.debug('Sending stop recording command to OBS.');
     const { recordingFilename } = await deps.stopObsRecording();
-    const recording = applyRecordingStopped(recordingFilename);
+    const recording = applyRecordingStopped(stoppingRecording.sceneName, recordingFilename);
 
     deps.logger.info('OBS recording stopped.');
     await deps.recordingRepository.saveRecording(recording);
@@ -223,14 +237,72 @@ const issueStopCommand = async (
   }
 };
 
+const issueSwitchSceneCommand = async (
+  deps: IssueRecordingCommandServiceDeps,
+  sceneName: string,
+): Promise<IssueRecordingCommandResult> => {
+  deps.logger.debug('Loading recording state before switching scene command.');
+  const currentRecording = await deps.recordingRepository.findRecording();
+  if (currentRecording === undefined) {
+    deps.logger.warn('Switching scene command failed because recording state was missing.');
+    throw new RecordingNotFoundError();
+  }
+
+  if (!canSwitchScene(currentRecording)) {
+    deps.logger.warn('switch scene command rejected because recording is not idle.');
+
+    return {
+      recording: currentRecording,
+      changed: false,
+      rejectedMessage: 'Recording is not idle.',
+    };
+  }
+
+  try {
+    deps.logger.debug('Sending switching scene command to OBS.');
+    await deps.switchObsScene(sceneName);
+    const recording = applyRecordingSceneSwitch(sceneName, currentRecording.lastRecordingFilename);
+
+    deps.logger.info('OBS scene switched.');
+    await deps.recordingRepository.saveRecording(recording);
+
+    return {
+      recording,
+      changed: true,
+      rejectedMessage: null,
+    };
+  } catch (error: unknown) {
+    const message = mapStopRecordingFailureMessage();
+    const recording = applyRecordingFailed(message, currentRecording);
+
+    deps.logger.error({ error }, 'OBS switching scene command failed.');
+    await deps.recordingRepository.saveRecording(recording);
+
+    return {
+      recording,
+      changed: false,
+      rejectedMessage: null,
+    };
+  }
+};
+
 export const createIssueRecordingCommandService = (
   deps: IssueRecordingCommandServiceDeps,
 ): IssueRecordingCommandService => {
   return async (command) => {
-    if (command.type === 'recording.start') {
-      return issueStartCommand(deps);
+    switch (command.type) {
+      case 'recording.start': {
+        return issueStartCommand(deps);
+      }
+      case 'recording.stop': {
+        return issueStopCommand(deps);
+      }
+      case 'recording.switch-scene': {
+        return issueSwitchSceneCommand(deps, command.sceneName);
+      }
+      default: {
+        throw new RecordingUnknownCommandError();
+      }
     }
-
-    return issueStopCommand(deps);
   };
 };

@@ -1,4 +1,5 @@
 import OBSWebSocket from 'obs-websocket-js';
+import type { AppLogger } from './recording-logger.js';
 
 export type StartObsRecordingResult = {
   currentFilename: string | null;
@@ -19,6 +20,7 @@ export type ObsRecordingAdapterConfig = {
 
 export type ObsRecordingAdapterDeps = {
   config: ObsRecordingAdapterConfig;
+  logger: AppLogger;
 };
 
 export const createObsClient = async (
@@ -51,16 +53,19 @@ export const readCurrentFilename = (response: unknown): string | null => {
 
 export const createStartRecording = (deps: ObsRecordingAdapterDeps): StartRecording => {
   return async () => {
+    deps.logger.debug({ url: deps.config.url }, 'Connecting to OBS for start recording.');
     const client = await createObsClient(deps.config);
 
     try {
       const response = await client.call('StartRecord');
       const currentFilename = readCurrentFilename(response);
+      deps.logger.info({ currentFilename }, 'OBS start recording command completed.');
 
       return {
         currentFilename,
       };
     } finally {
+      deps.logger.debug('Disconnecting OBS client after start recording command.');
       client.disconnect();
     }
   };
@@ -68,11 +73,14 @@ export const createStartRecording = (deps: ObsRecordingAdapterDeps): StartRecord
 
 export const createStopRecording = (deps: ObsRecordingAdapterDeps): StopRecording => {
   return async () => {
+    deps.logger.debug({ url: deps.config.url }, 'Connecting to OBS for stop recording.');
     const client = await createObsClient(deps.config);
 
     try {
       await client.call('StopRecord');
+      deps.logger.info('OBS stop recording command completed.');
     } finally {
+      deps.logger.debug('Disconnecting OBS client after stop recording command.');
       client.disconnect();
     }
   };

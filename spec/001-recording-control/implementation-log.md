@@ -145,3 +145,12 @@ Added the server composition root.
 - adds a health endpoint
 - exposes `createServerApp()` and `startServer()`
 - reads server and OBS configuration from environment variables
+
+## Session 17
+
+Completed the backend logging pass.
+
+- added controller request logging for `GET /recording`
+- added SQLite repository logging for open, read, missing state, and save operations
+- added OBS adapter logging for connect, command completion, and disconnect
+- added component-scoped child loggers in the server composition root

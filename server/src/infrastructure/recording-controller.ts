@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { ReadRecordingService } from '../application/recording-control.js';
 import { mapRecordingErrorToResponse } from './recording-error-response.js';
+import type { AppLogger } from './recording-logger.js';
 
 export type RecordingControllerEnv = {
   Bindings: Record<string, never>;
@@ -9,6 +10,7 @@ export type RecordingControllerEnv = {
 
 export type RecordingControllerDeps = {
   readRecording: ReadRecordingService;
+  logger: AppLogger;
 };
 
 export const createRecordingController = (
@@ -17,11 +19,20 @@ export const createRecordingController = (
   const app = new Hono<RecordingControllerEnv>();
 
   app.get('/recording', async (context) => {
+    deps.logger.debug('Handling GET /recording request.');
+
     try {
       const recording = await deps.readRecording();
+      deps.logger.info({ status: recording.status }, 'Handled GET /recording request.');
+
       return context.json(recording, 200);
     } catch (error: unknown) {
       const response = mapRecordingErrorToResponse(error);
+      deps.logger.error(
+        { error, status: response.status, code: response.body.error.code },
+        'Failed to handle GET /recording request.',
+      );
+
       return context.json(response.body, { status: response.status });
     }
   });

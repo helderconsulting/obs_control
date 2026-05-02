@@ -5,4 +5,3 @@ export const rootLogger = pino({
 });
 
 export type AppLogger = Logger;
-

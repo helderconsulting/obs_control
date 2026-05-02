@@ -38,7 +38,13 @@ export const createServerConfig = (): ServerConfig => {
 export const createServerApp = (config: ServerConfig): Hono => {
   const app = new Hono();
   const logger = rootLogger.child({ scope: 'server' });
-  const recordingRepository = createSqliteRecordingRepository();
+  const repositoryLogger = logger.child({ component: 'sqlite-recording-repository' });
+  const obsAdapterLogger = logger.child({ component: 'obs-recording-adapter' });
+  const controllerLogger = logger.child({ component: 'recording-controller' });
+  const gatewayLogger = logger.child({ component: 'websocket-recording-gateway' });
+  const recordingRepository = createSqliteRecordingRepository({
+    logger: repositoryLogger,
+  });
   const obsRecordingAdapterConfig = { url: config.obsUrl };
 
   if (config.obsPassword !== undefined) {
@@ -49,6 +55,7 @@ export const createServerApp = (config: ServerConfig): Hono => {
 
   const obsRecordingAdapter = createObsRecordingAdapter({
     config: obsRecordingAdapterConfig,
+    logger: obsAdapterLogger,
   });
   const readRecording = createReadRecordingService({
     recordingRepository,
@@ -62,12 +69,14 @@ export const createServerApp = (config: ServerConfig): Hono => {
   });
   const recordingController = createRecordingController({
     readRecording,
+    logger: controllerLogger,
   });
   const websocketRecordingGateway = createWebsocketRecordingGateway({
     issueRecordingCommand,
-    logger,
+    logger: gatewayLogger,
   });
 
+  logger.info('Composed server dependencies.');
   app.route('/', recordingController);
   app.route('/', websocketRecordingGateway.app);
   app.get('/health', (context) => {

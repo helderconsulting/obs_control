@@ -10,6 +10,7 @@ import {
   createStoppingRecording,
 } from '../domain/recording.js';
 import type { RecordingRepository } from '../application/recording-control.js';
+import type { AppLogger } from './recording-logger.js';
 
 const recordingsDirectory = join(process.cwd(), '.recordings');
 const databasePath = join(recordingsDirectory, 'recordings.db');
@@ -79,10 +80,15 @@ const toRow = (recording: Recording): RecordingRow => {
 };
 
 export type SqliteRecordingRepository = RecordingRepository;
+export type SqliteRecordingRepositoryDeps = {
+  initialRecording?: Recording;
+  logger: AppLogger;
+};
 
 export const createSqliteRecordingRepository = (
-  initialRecording: Recording = createIdleRecording(),
+  deps: SqliteRecordingRepositoryDeps,
 ): SqliteRecordingRepository => {
+  const initialRecording = deps.initialRecording ?? createIdleRecording();
   let database: DatabaseSync | null = null;
 
   const openDatabase = async (): Promise<DatabaseSync> => {
@@ -90,10 +96,15 @@ export const createSqliteRecordingRepository = (
       return database;
     }
 
+    deps.logger.debug({ databasePath }, 'Opening recording SQLite database.');
     await ensureRecordingsDirectory();
     database = createRecordingDatabase();
 
     if (initialRecording.status !== 'idle') {
+      deps.logger.debug(
+        { status: initialRecording.status },
+        'Seeding recording SQLite database with initial state.',
+      );
       const statement = database.prepare(`
         INSERT INTO recording_state (id, status, current_filename, message)
         VALUES (1, @status, @current_filename, @message)
@@ -115,15 +126,20 @@ export const createSqliteRecordingRepository = (
       .get() as RecordingRow | undefined;
 
     if (row === undefined) {
+      deps.logger.warn('Recording SQLite repository returned no persisted state.');
       return undefined;
     }
 
-    return toRecording(row);
+    const recording = toRecording(row);
+    deps.logger.debug({ status: recording.status }, 'Loaded recording state from SQLite.');
+
+    return recording;
   };
 
   const saveRecording = async (recording: Recording): Promise<void> => {
     const currentDatabase = await openDatabase();
     const row = toRow(recording);
+    deps.logger.debug({ status: recording.status }, 'Persisting recording state to SQLite.');
 
     const statement = currentDatabase.prepare(`
       INSERT INTO recording_state (id, status, current_filename, message)
@@ -134,6 +150,7 @@ export const createSqliteRecordingRepository = (
         message = excluded.message
     `);
     statement.run(row);
+    deps.logger.info({ status: recording.status }, 'Persisted recording state to SQLite.');
   };
 
   return {

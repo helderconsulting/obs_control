@@ -124,3 +124,14 @@ Refined the read path and logging behavior.
 - added a structured Pino logger module
 - added application-layer logging for successful reads, missing state, and read failures
 - made the command flow fail explicitly when the repository returns `undefined`
+
+## Session 15
+
+Implemented the recording websocket gateway.
+
+- validates websocket command messages with Zod
+- accepts `recording.start` and `recording.stop`
+- tracks connected websocket clients
+- broadcasts recording events to all connected clients
+- returns safe websocket error messages for invalid requests and command failures
+- adds logging for websocket connections, message handling, and broadcasts

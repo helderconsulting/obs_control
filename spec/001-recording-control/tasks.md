@@ -14,7 +14,7 @@ The work is organized to keep dependencies clean:
 
 ## Phase 1: Foundation
 
-- [ ] Set up the `client/` and `server/` folder structure described in the design.
+- [x] Set up the `client/` and `server/` folder structure described in the design.
 - [ ] Add shared TypeScript types for recording state, commands, and events if they need to be reused across client and server.
 - [ ] Confirm the client SPA entry route renders a basic recording page shell.
 
@@ -74,4 +74,3 @@ Dependencies:
 - [ ] Add a fallback error path for OBS connection failures and failed command responses.
 - [ ] Keep repository reads behind the application service so the controller never accesses storage directly.
 - [ ] Ensure the client never depends on OBS details or server-internal transport types.
-

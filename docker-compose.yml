@@ -1,0 +1,69 @@
+version: '3.9'
+
+services:
+  obs:
+    build:
+      context: .
+      dockerfile: Dockerfile.obs
+    restart: unless-stopped
+    shm_size: '256mb'
+    volumes:
+      - obs-data:/root/.config/obs-studio
+    environment:
+      # If you enable AuthRequired=true in obs-config/global.ini, set this:
+      - OBS_WEBSOCKET_PASSWORD=${OBS_WEBSOCKET_PASSWORD:-}
+    # obs-websocket is internal-only; remove the port mapping in production
+    # and let the server reach OBS via the Docker network.
+    expose:
+      - '4455'
+    healthcheck:
+      test: ['CMD', 'nc', '-z', 'localhost', '4455']
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    restart: unless-stopped
+    volumes:
+      # SQLite recordings database
+      - recordings-data:/app/.recordings
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # 'obs' resolves via Docker's internal DNS to the obs service
+      - OBS_WEBSOCKET_URL=ws://obs:4455
+      - OBS_WEBSOCKET_PASSWORD=${OBS_WEBSOCKET_PASSWORD:-}
+    expose:
+      - '3000'
+    depends_on:
+      obs:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://localhost:3000/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    restart: unless-stopped
+    ports:
+      - '${CLIENT_PORT:-80}:80'
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  obs-data:
+  recordings-data:

@@ -1,55 +1,77 @@
 # obs_control
 
-Objective:
+## Getting Started
 
-Develop a web application that integrates with OBS Studio to control key streaming/recording functions. The app should allow users to:
+### Prerequisites
 
-    Start a recording
-    Stop a recording
-    Switch scenes
-    Display the current recording filename
-    See “Bonus Features”
+- **OBS Studio ≥ 28** — the built-in WebSocket server (obs-websocket v5) is required. Download from [obsproject.com](https://obsproject.com).
 
-This assignment evaluates your ability to work with SvelteKit or SvelteKit (Single-page app) + Node.js.
-Requirements:
-Frontend
+### Option A — Docker
 
-    Create a minimal but intuitive UI using SvelteKit.
-    Implement buttons to start/stop recordings and switch scenes.
-    Display the current recording filename.
-    Use Tailwind for this assignment.
+The entire stack (OBS headless + Hono server + SvelteKit UI) runs in three containers. No local OBS installation needed.
 
-Backend
+**Requirements:** Docker Desktop or Docker Engine with Compose v2.
 
-    Use a separate Node/Hono backend for OBS interactions.
-    Expose GET endpoints for reload/bootstrap views, such as recording status and scenes.
-    Handle recording and scene switching commands over the backend websocket gateway.
-    Send realtime domain events over websockets, with each event carrying the changed aggregate delta.
-    Implement necessary logic to communicate with OBS.
-    Ensure proper error handling and logging.
+```bash
+docker compose up -d --build
 
-Bonus Features (Optional but encouraged)
+open http://localhost
+```
 
-    Provide a dropdown list of available scenes fetched from OBS.
-    Use of Svelte Store or Runes to store for example the available OBS scenes
-    Create a Dockerfile for easy deployment.
-    Real-time Updates: Reflect OBS status dynamically for example timecode and newly created scenes in OBS
+To follow logs: `docker compose logs -f`  
+To stop: `docker compose down`
 
-Technical Expectations
+OBS scenes and the recordings database persist in named Docker volumes across restarts. To reset them: `docker compose down -v`
 
-    Use TypeScript or JavaScript (developer's choice).
-    Maintain clean, modular, and well-documented code.
-    Implement basic error handling and UI feedback.
+> **WebSocket auth:** Authentication is disabled by default in `docker/obs-config/global.ini`, so no password is needed out of the box. To enable it: set `AuthRequired=true` and `ServerPassword` in `global.ini`, set the same value as `OBS_WEBSOCKET_PASSWORD` in `.env`, then rebuild: `docker compose up -d --build obs`.
 
-Submission Guidelines
+---
 
-    Provide a GitHub repository with the full project, at least one day before the follow up meeting
-    Include a README with setup instructions.
-    Ensure the project runs smoothly with clear instructions.
+### Option B — Local development
 
-Evaluation Criteria
+**Requirements:** Node.js ≥ 22.5, OBS Studio ≥ 28 installed locally.
 
-    Functionality: Does the app work as expected?
-    Code Quality: Is the code clean, structured, and maintainable? Does the implementation reflect Svelte knowledge
-    UI/UX: Is the interface user-friendly and responsive?
-    Error Handling: Are edge cases handled gracefully?
+**1. Configure OBS WebSocket**
+
+In OBS: `Tools → WebSocket Server Settings`
+- Enable the WebSocket server
+- Note the port (default `4455`) and password if set
+
+**2. Install dependencies**
+
+```bash
+npm install
+```
+
+**3. Configure the server**
+
+Create a `.env` file in the project root:
+
+```env
+LOG_LEVEL=debug
+OBS_WEBSOCKET_URL=ws://192.168.0.205:4455
+# OBS_WEBSOCKET_PASSWORD=your_password_here  # only needed if auth is enabled in OBS
+```
+
+**4. Start OBS**, then in two separate terminals:
+
+```bash
+# Terminal 1 — Hono server (auto-restarts on file changes)
+npm run dev:server
+
+# Terminal 2 — SvelteKit client (Vite dev server with HMR)
+npm run dev:client
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+The Vite dev server proxies `/obs`, `/recording`, `/health`, and `/ws` to the Hono server automatically — no extra config needed.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OBS_WEBSOCKET_URL` | `ws://127.0.0.1:4455` | WebSocket URL of the OBS instance |
+| `OBS_WEBSOCKET_PASSWORD` | _(none)_ | Password if OBS auth is enabled |
+| `PORT` | `3000` | Port the Hono server listens on |
+| `LOG_LEVEL` | `info` | Pino log level (`debug`, `info`, `warn`, `error`) |

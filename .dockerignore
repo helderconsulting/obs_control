@@ -1,0 +1,28 @@
+# Keep the build context lean — exclude anything not needed to build or run.
+
+# Version control
+.git
+.gitignore
+
+# Dev artifacts
+node_modules
+.svelte-kit
+build
+dist
+.recordings
+
+# Test & tooling
+e2e
+spec
+playwright-report
+playwright.config.ts
+eslint.config.mjs
+prettier.config.mjs
+
+# Env files (secrets must not leak into image layers)
+.env
+.env.*
+!.env.example
+
+# Docs
+*.md

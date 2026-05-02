@@ -1,0 +1,57 @@
+# =============================================================================
+# Dockerfile.obs
+# OBS Studio (headless) with built-in obs-websocket (OBS ≥ 28)
+#
+# Uses Ubuntu 24.04 whose default repos ship OBS 30.x — no PPA needed.
+# OBS runs headlessly via Xvfb; obs-websocket is reachable on port 4455.
+#
+# Requirements:
+#   --shm-size=256m   shared memory for the video pipeline
+#   volume mount for /root/.config/obs-studio  (scenes / profiles)
+#
+# Context: repo root  (docker build -f Dockerfile.obs .)
+# =============================================================================
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:99 \
+    XDG_RUNTIME_DIR=/tmp/runtime-root
+
+# ── System deps + OBS (all in one layer) ─────────────────────────────────────
+# Ubuntu 24.04 ships obs-studio 30.x in main — no PPA required.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    dbus \
+    dbus-x11 \
+    # Virtual display
+    xvfb \
+    x11-utils \
+    # Audio (OBS requires a sound server even without streaming audio)
+    pulseaudio \
+    # OBS runtime libraries
+    libgl1 \
+    libgles2 \
+    libxcomposite1 \
+    libxrandr2 \
+    libasound2t64 \
+    # OBS Studio (30.x, includes obs-websocket)
+    obs-studio \
+    # Process supervision
+    supervisor \
+    # Health-check
+    netcat-openbsd \
+ && obs --version \
+ && rm -rf /var/lib/apt/lists/*
+
+# ── OBS config ────────────────────────────────────────────────────────────────
+RUN mkdir -p /root/.config/obs-studio
+COPY docker/obs-config/global.ini       /root/.config/obs-studio/global.ini
+COPY docker/obs-config/supervisord.conf /etc/supervisor/conf.d/obs.conf
+
+EXPOSE 4455
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=6 \
+    CMD nc -z localhost 4455 || exit 1
+
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]

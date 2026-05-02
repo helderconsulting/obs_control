@@ -1,0 +1,50 @@
+# =============================================================================
+# Dockerfile.server
+# Hono/Node.js recording control server
+#
+# Runs TypeScript directly via tsx (--import tsx) — no separate compile step.
+# Requires Node >=22.5 for the built-in node:sqlite module.
+#
+# Context: repo root  (docker build -f Dockerfile.server .)
+# =============================================================================
+
+FROM node:22-slim AS deps
+
+WORKDIR /app
+
+# Copy only the lockfile + manifest first for layer caching
+COPY package.json package-lock.json ./
+
+# Install all deps (dev included — tsx is a devDependency)
+RUN npm ci --ignore-scripts
+
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+FROM node:22-slim
+
+# SQLite needs a writable directory; run as non-root for security
+RUN groupadd --gid 1001 nodejs \
+ && useradd --uid 1001 --gid nodejs --shell /bin/sh --create-home nodejs
+
+WORKDIR /app
+
+# node_modules from the deps stage
+COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# Source files needed at runtime (server + shared types)
+COPY --chown=nodejs:nodejs package.json ./
+COPY --chown=nodejs:nodejs server/   ./server/
+COPY --chown=nodejs:nodejs shared/   ./shared/
+
+# SQLite recordings directory — mounted as a volume in production
+RUN mkdir -p .recordings && chown nodejs:nodejs .recordings
+
+USER nodejs
+
+EXPOSE 3000
+
+# Mirror the start:server script but drop --inspect and --watch (not for prod)
+CMD ["node", \
+     "--experimental-sqlite", \
+     "--import", "tsx", \
+     "server/src/index.ts"]

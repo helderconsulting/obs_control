@@ -36,3 +36,12 @@ Installed the framework and OBS transport dependencies needed for implementation
 - Hono backend packages
 - `obs-websocket-js` for OBS communication
 
+## Session 5
+
+Completed the server domain recording module.
+
+- explicit recording states
+- state constructors
+- start/stop eligibility guards
+- transition helpers for start, stop, and failure paths
+

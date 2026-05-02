@@ -20,8 +20,8 @@ The work is organized to keep dependencies clean:
 
 ## Phase 2: Server Domain and Application
 
-- [ ] Implement the recording domain model with explicit idle, starting, recording, stopping, and error states.
-- [ ] Add recording state transition helpers and duplicate-command guards in the domain layer.
+- [x] Implement the recording domain model with explicit idle, starting, recording, stopping, and error states.
+- [x] Add recording state transition helpers and duplicate-command guards in the domain layer.
 - [ ] Define the recording repository port used by the application service.
 - [ ] Implement the recording read application service that loads state through the repository.
 - [ ] Implement the recording command application service that validates commands and coordinates OBS operations.

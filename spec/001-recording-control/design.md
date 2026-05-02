@@ -64,27 +64,36 @@ Use a compact recording state model with explicit states:
 ```ts
 export type RecordingIdle = {
   status: 'idle';
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingStarting = {
   status: 'starting';
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingActive = {
   status: 'recording';
-  currentFilename: string | null;
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingStopping = {
   status: 'stopping';
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingError = {
   status: 'error';
   message: string;
+  lastRecordingFilename: string | null;
 };
 
-export type Recording = RecordingIdle | RecordingStarting | RecordingActive | RecordingStopping | RecordingError;
+export type Recording =
+  | RecordingIdle
+  | RecordingStarting
+  | RecordingActive
+  | RecordingStopping
+  | RecordingError;
 ```
 
 ### Command model
@@ -114,7 +123,7 @@ export type RecordingStartedEvent = {
   occurredAt: string;
   delta: {
     status: 'recording';
-    currentFilename: string | null;
+    lastRecordingFilename: string | null;
   };
 };
 
@@ -124,6 +133,7 @@ export type RecordingStoppedEvent = {
   occurredAt: string;
   delta: {
     status: 'idle';
+    lastRecordingFilename: string | null;
   };
 };
 
@@ -134,9 +144,14 @@ export type RecordingFailedEvent = {
   delta: {
     status: 'error';
     message: string;
+    lastRecordingFilename: string | null;
   };
 };
 ```
+
+OBS Studio does not return a recording filename from the `StartRecord` response. The backend
+therefore treats the `StopRecord.outputPath` value as the durable saved filename and exposes it as
+`lastRecordingFilename`.
 
 ## API Design
 

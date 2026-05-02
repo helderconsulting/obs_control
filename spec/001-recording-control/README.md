@@ -21,4 +21,3 @@ Control OBS Studio recording through the app:
 
 - Start a recording
 - Stop a recording
-

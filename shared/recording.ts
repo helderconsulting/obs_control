@@ -1,23 +1,27 @@
 export type RecordingIdle = {
   status: 'idle';
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingStarting = {
   status: 'starting';
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingActive = {
   status: 'recording';
-  currentFilename: string | null;
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingStopping = {
   status: 'stopping';
+  lastRecordingFilename: string | null;
 };
 
 export type RecordingError = {
   status: 'error';
   message: string;
+  lastRecordingFilename: string | null;
 };
 
 export type Recording =
@@ -43,7 +47,7 @@ export type RecordingStartedEvent = {
   occurredAt: string;
   delta: {
     status: 'recording';
-    currentFilename: string | null;
+    lastRecordingFilename: string | null;
   };
 };
 
@@ -53,6 +57,7 @@ export type RecordingStoppedEvent = {
   occurredAt: string;
   delta: {
     status: 'idle';
+    lastRecordingFilename: string | null;
   };
 };
 
@@ -63,10 +68,8 @@ export type RecordingFailedEvent = {
   delta: {
     status: 'error';
     message: string;
+    lastRecordingFilename: string | null;
   };
 };
 
-export type RecordingEvent =
-  | RecordingStartedEvent
-  | RecordingStoppedEvent
-  | RecordingFailedEvent;
+export type RecordingEvent = RecordingStartedEvent | RecordingStoppedEvent | RecordingFailedEvent;

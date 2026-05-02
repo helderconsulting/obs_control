@@ -1,7 +1,4 @@
-import type {
-  Recording,
-  RecordingCommand,
-} from '../../../shared/recording.js';
+import type { Recording, RecordingCommand } from '../../../shared/recording.js';
 import {
   applyRecordingFailed,
   applyRecordingStarted,
@@ -10,11 +7,10 @@ import {
   beginStoppingRecording,
   canStartRecording,
   canStopRecording,
+  createIdleRecordingWithFilename,
+  createRecording,
 } from '../domain/recording.js';
-import {
-  RecordingNotFoundError,
-  RecordingReadError,
-} from './recording-control-errors.js';
+import { RecordingNotFoundError, RecordingReadError } from './recording-control-errors.js';
 import type { AppLogger } from '../infrastructure/recording-logger.js';
 
 export type FindRecording = () => Promise<Recording | undefined>;
@@ -28,6 +24,7 @@ export type RecordingRepository = {
 
 export type ReadRecordingServiceDeps = {
   recordingRepository: RecordingRepository;
+  getObsRecordingStatus: () => Promise<{ outputActive: boolean }>;
   logger: AppLogger;
 };
 
@@ -38,11 +35,41 @@ export const createReadRecordingService = (
 ): ReadRecordingService => {
   return async () => {
     try {
-      const recording = await deps.recordingRepository.findRecording();
+      const storedRecording = await deps.recordingRepository.findRecording();
 
-      if (recording === undefined) {
+      if (storedRecording === undefined) {
         deps.logger.warn('Recording read model was missing.');
         throw new RecordingNotFoundError();
+      }
+
+      let recording = storedRecording;
+
+      try {
+        const obsRecordingStatus = await deps.getObsRecordingStatus();
+        const normalizedRecording = obsRecordingStatus.outputActive
+          ? createRecording(storedRecording.lastRecordingFilename)
+          : createIdleRecordingWithFilename(storedRecording.lastRecordingFilename);
+
+        recording =
+          storedRecording.status === normalizedRecording.status
+            ? storedRecording
+            : normalizedRecording;
+
+        if (recording !== storedRecording) {
+          deps.logger.info(
+            {
+              persistedStatus: storedRecording.status,
+              normalizedStatus: recording.status,
+            },
+            'Normalized persisted recording state against OBS.',
+          );
+          await deps.recordingRepository.saveRecording(recording);
+        }
+      } catch (error: unknown) {
+        deps.logger.warn(
+          { error, persistedStatus: storedRecording.status },
+          'Unable to reconcile persisted recording state against OBS. Returning stored state.',
+        );
       }
 
       deps.logger.debug('Recording read model loaded.');
@@ -61,13 +88,14 @@ export const createReadRecordingService = (
   };
 };
 
-export type StartObsRecording = () => Promise<{ currentFilename: string | null }>;
+export type StartObsRecording = () => Promise<void>;
 
-export type StopObsRecording = () => Promise<void>;
+export type StopObsRecording = () => Promise<{ recordingFilename: string | null }>;
 
 export type IssueRecordingCommandResult = {
   recording: Recording;
   changed: boolean;
+  rejectedMessage: string | null;
 };
 
 export type IssueRecordingCommandService = (
@@ -79,6 +107,14 @@ export type IssueRecordingCommandServiceDeps = {
   startObsRecording: StartObsRecording;
   stopObsRecording: StopObsRecording;
   logger: AppLogger;
+};
+
+const mapStartRecordingFailureMessage = (): string => {
+  return 'Unable to start recording because OBS is unavailable.';
+};
+
+const mapStopRecordingFailureMessage = (): string => {
+  return 'Unable to stop recording because OBS is unavailable.';
 };
 
 const issueStartCommand = async (
@@ -94,12 +130,11 @@ const issueStartCommand = async (
 
   if (!canStartRecording(currentRecording)) {
     deps.logger.warn('Start command rejected because recording is already active.');
-    const recording = applyRecordingFailed('Recording is already active.');
-    await deps.recordingRepository.saveRecording(recording);
 
     return {
-      recording,
+      recording: currentRecording,
       changed: false,
+      rejectedMessage: 'Recording is already active.',
     };
   }
 
@@ -109,19 +144,20 @@ const issueStartCommand = async (
 
   try {
     deps.logger.debug('Sending start recording command to OBS.');
-    const { currentFilename } = await deps.startObsRecording();
-    const recording = applyRecordingStarted(currentFilename);
+    await deps.startObsRecording();
+    const recording = applyRecordingStarted(startingRecording);
 
-    deps.logger.info({ currentFilename }, 'OBS recording started.');
+    deps.logger.info('OBS recording started.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {
       recording,
       changed: true,
+      rejectedMessage: null,
     };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to start recording.';
-    const recording = applyRecordingFailed(message);
+    const message = mapStartRecordingFailureMessage();
+    const recording = applyRecordingFailed(message, startingRecording);
 
     deps.logger.error({ error }, 'OBS start recording command failed.');
     await deps.recordingRepository.saveRecording(recording);
@@ -129,6 +165,7 @@ const issueStartCommand = async (
     return {
       recording,
       changed: false,
+      rejectedMessage: null,
     };
   }
 };
@@ -146,12 +183,11 @@ const issueStopCommand = async (
 
   if (!canStopRecording(currentRecording)) {
     deps.logger.warn('Stop command rejected because recording is not active.');
-    const recording = applyRecordingFailed('Recording is not active.');
-    await deps.recordingRepository.saveRecording(recording);
 
     return {
-      recording,
+      recording: currentRecording,
       changed: false,
+      rejectedMessage: 'Recording is not active.',
     };
   }
 
@@ -161,8 +197,8 @@ const issueStopCommand = async (
 
   try {
     deps.logger.debug('Sending stop recording command to OBS.');
-    await deps.stopObsRecording();
-    const recording = applyRecordingStopped();
+    const { recordingFilename } = await deps.stopObsRecording();
+    const recording = applyRecordingStopped(recordingFilename);
 
     deps.logger.info('OBS recording stopped.');
     await deps.recordingRepository.saveRecording(recording);
@@ -170,10 +206,11 @@ const issueStopCommand = async (
     return {
       recording,
       changed: true,
+      rejectedMessage: null,
     };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to stop recording.';
-    const recording = applyRecordingFailed(message);
+    const message = mapStopRecordingFailureMessage();
+    const recording = applyRecordingFailed(message, stoppingRecording);
 
     deps.logger.error({ error }, 'OBS stop recording command failed.');
     await deps.recordingRepository.saveRecording(recording);
@@ -181,6 +218,7 @@ const issueStopCommand = async (
     return {
       recording,
       changed: false,
+      rejectedMessage: null,
     };
   }
 };

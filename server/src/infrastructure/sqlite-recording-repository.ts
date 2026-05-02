@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { Recording } from '../../../shared/recording.js';
 import {
   createIdleRecording,
+  createIdleRecordingWithFilename,
   createRecording,
   createRecordingError,
   createStartingRecording,
@@ -17,12 +18,35 @@ const databasePath = join(recordingsDirectory, 'recordings.db');
 
 type RecordingRow = {
   status: Recording['status'];
-  current_filename: string | null;
+  last_recording_filename: string | null;
   message: string | null;
 };
 
 const ensureRecordingsDirectory = async (): Promise<void> => {
   await mkdir(recordingsDirectory, { recursive: true });
+};
+
+type TableInfoRow = {
+  name: string;
+};
+
+const ensureRecordingFilenameColumn = (database: DatabaseSync): void => {
+  const columns = database.prepare('PRAGMA table_info(recording_state)').all() as TableInfoRow[];
+  const columnNames = new Set(columns.map((column) => column.name));
+
+  if (columnNames.has('last_recording_filename')) {
+    return;
+  }
+
+  database.exec('ALTER TABLE recording_state ADD COLUMN last_recording_filename TEXT;');
+
+  if (columnNames.has('current_filename')) {
+    database.exec(`
+      UPDATE recording_state
+      SET last_recording_filename = current_filename
+      WHERE last_recording_filename IS NULL;
+    `);
+  }
 };
 
 const createRecordingDatabase = (): DatabaseSync => {
@@ -31,50 +55,57 @@ const createRecordingDatabase = (): DatabaseSync => {
     CREATE TABLE IF NOT EXISTS recording_state (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       status TEXT NOT NULL,
-      current_filename TEXT,
+      last_recording_filename TEXT,
       message TEXT
     ) STRICT;
   `);
+  ensureRecordingFilenameColumn(database);
 
   return database;
+};
+
+const upsertRecordingRow = (database: DatabaseSync, recording: Recording): void => {
+  const row = toRow(recording);
+  const statement = database.prepare(`
+    INSERT INTO recording_state (id, status, last_recording_filename, message)
+    VALUES (1, @status, @last_recording_filename, @message)
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      last_recording_filename = excluded.last_recording_filename,
+      message = excluded.message
+  `);
+
+  statement.run(row);
 };
 
 const toRecording = (row: RecordingRow): Recording => {
   switch (row.status) {
     case 'recording':
-      return createRecording(row.current_filename);
+      return createRecording(row.last_recording_filename);
     case 'starting':
-      return createStartingRecording();
+      return createStartingRecording(row.last_recording_filename);
     case 'stopping':
-      return createStoppingRecording();
+      return createStoppingRecording(row.last_recording_filename);
     case 'error':
-      return createRecordingError(row.message ?? 'Recording failed.');
+      return createRecordingError(row.message ?? 'Recording failed.', row.last_recording_filename);
     case 'idle':
     default:
-      return createIdleRecording();
+      return createIdleRecordingWithFilename(row.last_recording_filename);
   }
 };
 
 const toRow = (recording: Recording): RecordingRow => {
-  if (recording.status === 'recording') {
-    return {
-      status: recording.status,
-      current_filename: recording.currentFilename,
-      message: null,
-    };
-  }
-
   if (recording.status === 'error') {
     return {
       status: recording.status,
-      current_filename: null,
+      last_recording_filename: recording.lastRecordingFilename,
       message: recording.message,
     };
   }
 
   return {
     status: recording.status,
-    current_filename: null,
+    last_recording_filename: recording.lastRecordingFilename,
     message: null,
   };
 };
@@ -100,20 +131,16 @@ export const createSqliteRecordingRepository = (
     await ensureRecordingsDirectory();
     database = createRecordingDatabase();
 
-    if (initialRecording.status !== 'idle') {
+    const persistedRow = database
+      .prepare('SELECT status, last_recording_filename, message FROM recording_state WHERE id = 1')
+      .get() as RecordingRow | undefined;
+
+    if (persistedRow === undefined) {
       deps.logger.debug(
         { status: initialRecording.status },
         'Seeding recording SQLite database with initial state.',
       );
-      const statement = database.prepare(`
-        INSERT INTO recording_state (id, status, current_filename, message)
-        VALUES (1, @status, @current_filename, @message)
-        ON CONFLICT(id) DO UPDATE SET
-          status = excluded.status,
-          current_filename = excluded.current_filename,
-          message = excluded.message
-      `);
-      statement.run(toRow(initialRecording));
+      upsertRecordingRow(database, initialRecording);
     }
 
     return database;
@@ -122,7 +149,7 @@ export const createSqliteRecordingRepository = (
   const hydrate = async (): Promise<Recording | undefined> => {
     const currentDatabase = await openDatabase();
     const row = currentDatabase
-      .prepare('SELECT status, current_filename, message FROM recording_state WHERE id = 1')
+      .prepare('SELECT status, last_recording_filename, message FROM recording_state WHERE id = 1')
       .get() as RecordingRow | undefined;
 
     if (row === undefined) {
@@ -138,18 +165,9 @@ export const createSqliteRecordingRepository = (
 
   const saveRecording = async (recording: Recording): Promise<void> => {
     const currentDatabase = await openDatabase();
-    const row = toRow(recording);
     deps.logger.debug({ status: recording.status }, 'Persisting recording state to SQLite.');
 
-    const statement = currentDatabase.prepare(`
-      INSERT INTO recording_state (id, status, current_filename, message)
-      VALUES (1, @status, @current_filename, @message)
-      ON CONFLICT(id) DO UPDATE SET
-        status = excluded.status,
-        current_filename = excluded.current_filename,
-        message = excluded.message
-    `);
-    statement.run(row);
+    upsertRecordingRow(currentDatabase, recording);
     deps.logger.info({ status: recording.status }, 'Persisted recording state to SQLite.');
   };
 

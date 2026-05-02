@@ -73,7 +73,6 @@ const createRecordingStartedEvent = (
   recording: Extract<Recording, { status: 'recording' }>,
 ): RecordingStartedEvent => {
   const occurredAt = new Date().toISOString();
-  const currentFilename = recording.currentFilename;
 
   return {
     type: 'recording.started',
@@ -81,12 +80,14 @@ const createRecordingStartedEvent = (
     occurredAt,
     delta: {
       status: 'recording',
-      currentFilename,
+      lastRecordingFilename: recording.lastRecordingFilename,
     },
   };
 };
 
-const createRecordingStoppedEvent = (): RecordingStoppedEvent => {
+const createRecordingStoppedEvent = (
+  recording: Extract<Recording, { status: 'idle' }>,
+): RecordingStoppedEvent => {
   const occurredAt = new Date().toISOString();
 
   return {
@@ -95,6 +96,7 @@ const createRecordingStoppedEvent = (): RecordingStoppedEvent => {
     occurredAt,
     delta: {
       status: 'idle',
+      lastRecordingFilename: recording.lastRecordingFilename,
     },
   };
 };
@@ -112,11 +114,12 @@ const createRecordingFailedEvent = (
     delta: {
       status: 'error',
       message,
+      lastRecordingFilename: recording.lastRecordingFilename,
     },
   };
 };
 
-const createRecordingEvent = (recording: Recording): RecordingEvent => {
+const createRecordingEvent = (recording: Recording): RecordingEvent | null => {
   if (recording.status === 'recording') {
     return createRecordingStartedEvent(recording);
   }
@@ -125,7 +128,11 @@ const createRecordingEvent = (recording: Recording): RecordingEvent => {
     return createRecordingFailedEvent(recording);
   }
 
-  return createRecordingStoppedEvent();
+  if (recording.status === 'idle') {
+    return createRecordingStoppedEvent(recording);
+  }
+
+  return null;
 };
 
 const createGatewayErrorMessage = (error: unknown): RecordingGatewayErrorMessage => {
@@ -138,6 +145,16 @@ const createGatewayErrorMessage = (error: unknown): RecordingGatewayErrorMessage
       code: errorBody.code,
       message: errorBody.message,
       details: errorBody.details,
+    },
+  };
+};
+
+const createCommandRejectedMessage = (message: string): RecordingGatewayErrorMessage => {
+  return {
+    type: 'recording.error',
+    error: {
+      code: 'recording.command_rejected',
+      message,
     },
   };
 };
@@ -167,16 +184,31 @@ const handleRecordingCommand = async (
   socket: WSContext,
   command: RecordingCommand,
 ): Promise<void> => {
-  deps.logger.debug({ commandType: command.type }, 'Processing recording websocket command.');
+  deps.logger.info({ commandType: command.type }, 'Received recording websocket command.');
 
   try {
     const result = await deps.issueRecordingCommand(command);
-    const event = createRecordingEvent(result.recording);
 
     deps.logger.info(
       { commandType: command.type, changed: result.changed, status: result.recording.status },
       'Processed recording websocket command.',
     );
+
+    if (result.rejectedMessage !== null) {
+      sendJsonMessage(socket, createCommandRejectedMessage(result.rejectedMessage));
+      return;
+    }
+
+    const event = createRecordingEvent(result.recording);
+
+    if (event === null) {
+      deps.logger.debug(
+        { status: result.recording.status },
+        'Skipping websocket broadcast for transitional recording state.',
+      );
+      return;
+    }
+
     broadcastJsonMessage(sockets, event);
   } catch (error: unknown) {
     deps.logger.error({ error, commandType: command.type }, 'Recording websocket command failed.');
@@ -242,7 +274,7 @@ export const createWebsocketRecordingGateway = (
         sockets.delete(socket);
         deps.logger.info({ clients: sockets.size }, 'Recording websocket client disconnected.');
       },
-      onError(_event, _socket) {
+      onError() {
         deps.logger.error('Recording websocket client error.');
       },
     })),

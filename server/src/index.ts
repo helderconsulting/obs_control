@@ -10,6 +10,7 @@ import { createRecordingController } from './infrastructure/recording-controller
 import { rootLogger } from './infrastructure/recording-logger.js';
 import { createSqliteRecordingRepository } from './infrastructure/sqlite-recording-repository.js';
 import { createWebsocketRecordingGateway } from './infrastructure/websocket-recording-gateway.js';
+import { cors } from 'hono/cors';
 
 export type ServerConfig = {
   port: number;
@@ -28,7 +29,7 @@ export const createServerConfig = (): ServerConfig => {
     obsUrl,
   };
 
-  if (obsPassword !== undefined) {
+  if (obsPassword !== undefined && obsPassword.length > 0) {
     config.obsPassword = obsPassword;
   }
 
@@ -37,6 +38,13 @@ export const createServerConfig = (): ServerConfig => {
 
 export const createServerApp = (config: ServerConfig): Hono => {
   const app = new Hono();
+  app.use(
+    '/*',
+    cors({
+      origin: 'http://localhost:3000',
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    }),
+  );
   const logger = rootLogger.child({ scope: 'server' });
   const repositoryLogger = logger.child({ component: 'sqlite-recording-repository' });
   const obsAdapterLogger = logger.child({ component: 'obs-recording-adapter' });
@@ -45,7 +53,9 @@ export const createServerApp = (config: ServerConfig): Hono => {
   const recordingRepository = createSqliteRecordingRepository({
     logger: repositoryLogger,
   });
-  const obsRecordingAdapterConfig = { url: config.obsUrl };
+  const obsRecordingAdapterConfig: Parameters<typeof createObsRecordingAdapter>[0]['config'] = {
+    url: config.obsUrl,
+  };
 
   if (config.obsPassword !== undefined) {
     Object.assign(obsRecordingAdapterConfig, {
@@ -57,8 +67,12 @@ export const createServerApp = (config: ServerConfig): Hono => {
     config: obsRecordingAdapterConfig,
     logger: obsAdapterLogger,
   });
+  void obsRecordingAdapter.checkConnection().catch((error: unknown) => {
+    obsAdapterLogger.error({ error }, 'Initial OBS websocket connection check failed.');
+  });
   const readRecording = createReadRecordingService({
     recordingRepository,
+    getObsRecordingStatus: obsRecordingAdapter.getRecordingStatus,
     logger,
   });
   const issueRecordingCommand = createIssueRecordingCommandService({
@@ -69,6 +83,7 @@ export const createServerApp = (config: ServerConfig): Hono => {
   });
   const recordingController = createRecordingController({
     readRecording,
+    getObsConnectionStatus: obsRecordingAdapter.getStatus,
     logger: controllerLogger,
   });
   const websocketRecordingGateway = createWebsocketRecordingGateway({

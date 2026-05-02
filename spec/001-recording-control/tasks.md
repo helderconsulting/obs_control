@@ -52,8 +52,8 @@ Dependencies:
 - [x] Fetch the bootstrap recording state from `GET /recording` on page load.
 - [x] Render start and stop controls based on the current recording state.
 - [x] Display the current recording status and filename when available.
-- [ ] Connect the client to the websocket gateway and apply incoming recording events.
-- [ ] Show success and error feedback in the UI using visible accessible states.
+- [x] Connect the client to the websocket gateway and apply incoming recording events.
+- [x] Show success and error feedback in the UI using visible accessible states.
 
 Dependencies:
 
@@ -62,15 +62,15 @@ Dependencies:
 
 ## Phase 5: Verification and Polish
 
-- [ ] Run the Playwright recording flow against the implemented UI.
-- [ ] Fix any state mismatch between bootstrap data and websocket updates.
-- [ ] Verify invalid duplicate commands are blocked and surfaced cleanly.
-- [ ] Verify the unavailable OBS case shows a user-readable error.
-- [ ] Run formatting, linting, and typechecking before completion.
+- [x] Run the Playwright recording flow against the implemented UI.
+- [x] Fix any state mismatch between bootstrap data and websocket updates.
+- [x] Verify invalid duplicate commands are blocked and surfaced cleanly.
+- [x] Verify the unavailable OBS case shows a user-readable error.
+- [x] Run formatting, linting, and typechecking before completion.
 
 ## Risk Mitigation Tasks
 
-- [ ] Add explicit handling for transitional `starting` and `stopping` states so the UI does not allow duplicate commands.
-- [ ] Add a fallback error path for OBS connection failures and failed command responses.
-- [ ] Keep repository reads behind the application service so the controller never accesses storage directly.
-- [ ] Ensure the client never depends on OBS details or server-internal transport types.
+- [x] Add explicit handling for transitional `starting` and `stopping` states so the UI does not allow duplicate commands.
+- [x] Add a fallback error path for OBS connection failures and failed command responses.
+- [x] Keep repository reads behind the application service so the controller never accesses storage directly.
+- [x] Ensure the client never depends on OBS details or server-internal transport types.

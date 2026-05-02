@@ -102,4 +102,3 @@ Acceptance criteria:
 - A user can stop recording from the app and see the UI update to the inactive state.
 - The app shows a clear error message when OBS is unavailable or rejects a command.
 - The recording workflow can be exercised through an automated Playwright E2E test.
-

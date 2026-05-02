@@ -18,6 +18,20 @@ export type RecordingApiFailure = {
 
 export type RecordingApiResult = RecordingApiSuccess | RecordingApiFailure;
 
+export type ObsConnectionStatus =
+  | {
+      status: 'connected';
+      url: string;
+      checkedAt: string;
+      message: string;
+    }
+  | {
+      status: 'disconnected';
+      url: string;
+      checkedAt: string | null;
+      message: string;
+    };
+
 type RecordingErrorResponse = {
   error?: Partial<RecordingApiError>;
 };
@@ -70,4 +84,14 @@ export const fetchRecording = async (): Promise<RecordingApiResult> => {
     ok: false,
     error,
   };
+};
+
+export const fetchObsConnectionStatus = async (): Promise<ObsConnectionStatus> => {
+  const response = await fetch('/obs/connection');
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch OBS connection status.');
+  }
+
+  return (await response.json()) as ObsConnectionStatus;
 };

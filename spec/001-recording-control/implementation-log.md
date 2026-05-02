@@ -172,3 +172,49 @@ Connected the recording page to the bootstrap read endpoint.
 - load the recording state on mount
 - update the page status, filename, and button availability from backend data
 - surface bootstrap failures as a visible error state
+
+## Session 20
+
+Connected the client to the recording websocket gateway.
+
+- added a client websocket helper for `/ws/recording`
+- apply incoming recording events to the page state
+- show websocket and gateway errors in the UI
+- keep bootstrap state and realtime updates on the same page model
+
+## Session 21
+
+Corrected the OBS filename and websocket reliability behavior.
+
+- stopped treating `StartRecord` as a source for recording filenames
+- mapped `StopRecord.outputPath` to `lastRecordingFilename`
+- preserved the latest saved recording filename across idle, transitional, recording, and error states
+- prevented duplicate commands from overwriting the persisted recording state with an error
+- replaced per-command OBS websocket connections with a managed connection that reconnects after close/error and applies connect/command timeouts
+- made the Playwright recording flow deterministic with mocked browser-side HTTP and websocket contracts
+
+## Session 22
+
+Added OBS websocket connection diagnostics.
+
+- added an explicit OBS websocket connection check during server composition
+- promoted OBS connection and recording command attempts to info-level logs
+- promoted received browser recording commands to info-level websocket gateway logs
+- verified direct connectivity to `ws://192.168.0.205:4455` with OBS websocket version `5.7.3` and negotiated RPC version `1`
+
+## Session 23
+
+Added persistent OBS connection status reporting.
+
+- added a managed OBS connection status model with reconnect scheduling
+- exposed `GET /obs/connection` from the backend controller
+- verified the running server reports `connected` for `ws://192.168.0.205:4455`
+- added client-side OBS connection status fetching so the UI can distinguish backend-to-OBS connectivity from the browser websocket
+
+## Session 24
+
+Added stale transitional state recovery.
+
+- added `GetRecordStatus` support in the OBS adapter
+- normalized persisted `starting` and `stopping` states against the actual OBS recording state during bootstrap reads
+- kept bootstrap reads non-fatal when OBS reconciliation is temporarily unavailable

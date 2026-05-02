@@ -9,38 +9,55 @@ import type {
 
 export const createIdleRecording = (): RecordingIdle => ({
   status: 'idle',
+  lastRecordingFilename: null,
 });
 
-export const createStartingRecording = (): RecordingStarting => ({
+export const createIdleRecordingWithFilename = (
+  lastRecordingFilename: string | null,
+): RecordingIdle => ({
+  status: 'idle',
+  lastRecordingFilename,
+});
+
+export const createStartingRecording = (
+  lastRecordingFilename: string | null,
+): RecordingStarting => ({
   status: 'starting',
+  lastRecordingFilename,
 });
 
-export const createRecording = (currentFilename: string | null): RecordingActive => ({
+export const createRecording = (lastRecordingFilename: string | null): RecordingActive => ({
   status: 'recording',
-  currentFilename,
+  lastRecordingFilename,
 });
 
-export const createStoppingRecording = (): RecordingStopping => ({
+export const createStoppingRecording = (
+  lastRecordingFilename: string | null,
+): RecordingStopping => ({
   status: 'stopping',
+  lastRecordingFilename,
 });
 
-export const createRecordingError = (message: string): RecordingError => ({
+export const createRecordingError = (
+  message: string,
+  lastRecordingFilename: string | null,
+): RecordingError => ({
   status: 'error',
   message,
+  lastRecordingFilename,
 });
 
 export const canStartRecording = (recording: Recording): boolean =>
   recording.status === 'idle' || recording.status === 'error';
 
-export const canStopRecording = (recording: Recording): boolean =>
-  recording.status === 'recording';
+export const canStopRecording = (recording: Recording): boolean => recording.status === 'recording';
 
 export const beginStartingRecording = (recording: Recording): Recording => {
   if (!canStartRecording(recording)) {
     return recording;
   }
 
-  return createStartingRecording();
+  return createStartingRecording(recording.lastRecordingFilename);
 };
 
 export const beginStoppingRecording = (recording: Recording): Recording => {
@@ -48,12 +65,14 @@ export const beginStoppingRecording = (recording: Recording): Recording => {
     return recording;
   }
 
-  return createStoppingRecording();
+  return createStoppingRecording(recording.lastRecordingFilename);
 };
 
-export const applyRecordingStarted = (currentFilename: string | null): Recording =>
-  createRecording(currentFilename);
+export const applyRecordingStarted = (recording: Recording): Recording =>
+  createRecording(recording.lastRecordingFilename);
 
-export const applyRecordingStopped = (): Recording => createIdleRecording();
+export const applyRecordingStopped = (lastRecordingFilename: string | null): Recording =>
+  createIdleRecordingWithFilename(lastRecordingFilename);
 
-export const applyRecordingFailed = (message: string): Recording => createRecordingError(message);
+export const applyRecordingFailed = (message: string, recording: Recording): Recording =>
+  createRecordingError(message, recording.lastRecordingFilename);

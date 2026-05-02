@@ -19,3 +19,20 @@ Completed the shared type module for recording control.
 - added recording command types
 - added recording event types
 
+## Session 3
+
+Created a minimal client page shell for the recording control view.
+
+- heading for the recording page
+- status region
+- start and stop buttons
+- filename placeholder
+
+## Session 4
+
+Installed the framework and OBS transport dependencies needed for implementation.
+
+- SvelteKit frontend packages
+- Hono backend packages
+- `obs-websocket-js` for OBS communication
+

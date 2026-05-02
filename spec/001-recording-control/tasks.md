@@ -16,7 +16,7 @@ The work is organized to keep dependencies clean:
 
 - [x] Set up the `client/` and `server/` folder structure described in the design.
 - [x] Add shared TypeScript types for recording state, commands, and events if they need to be reused across client and server.
-- [ ] Confirm the client SPA entry route renders a basic recording page shell.
+- [x] Confirm the client SPA entry route renders a basic recording page shell.
 
 ## Phase 2: Server Domain and Application
 

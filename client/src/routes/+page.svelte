@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { RecordingState } from '$lib/stores/recording.svelte.ts';
+  import { RecordingState } from '$lib/stores/recording.svelte';
   import Header from '$lib/components/Header.svelte';
   import StatusCard from '$lib/components/StatusCard.svelte';
   import Recorder from '$lib/components/Recorder.svelte';
@@ -73,7 +73,9 @@
       status={state.obsConnectionStatus.status === 'connected' ? 'connected' : 'disconnected'}
     >
       <p class="m-0 text-[1.15rem] font-semibold tracking-[-0.03em]">{obsStatusLabel}</p>
-      <p class="m-0 break-all text-sm leading-6 text-slate-200/80">{state.obsConnectionStatus.url}</p>
+      <p class="m-0 break-all text-sm leading-6 text-slate-200/80">
+        {state.obsConnectionStatus.url}
+      </p>
       <p class="m-0 text-sm leading-6 text-slate-200/80">{state.obsConnectionStatus.message}</p>
     </StatusCard>
   </section>

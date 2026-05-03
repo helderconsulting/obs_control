@@ -1,17 +1,20 @@
 <script lang="ts">
+  import type { Recording } from '../../../../shared/recording.js';
   import SceneSelector from './SceneSelector.svelte';
   import RecordButton from './RecordButton.svelte';
   import Alert from './Alert.svelte';
 
-  let { 
-    status, 
-    scenes, 
-    onStart, 
-    onStop, 
-    onSwitchScene,
-    error,
-    alert
-  } = $props();
+  type Props = {
+    status: Recording['status'];
+    scenes: string[];
+    onStart: () => void;
+    onStop: () => void;
+    onSwitchScene: (sceneName: string) => void;
+    error?: string;
+    alert?: string;
+  };
+
+  let { status, scenes, onStart, onStop, onSwitchScene, error, alert }: Props = $props();
 
   let canStart = $derived(status === 'idle' || status === 'error');
   let canStop = $derived(status === 'recording');
@@ -31,18 +34,8 @@
   <SceneSelector {scenes} onchange={onSwitchScene} />
 
   <div class="grid gap-4 md:grid-cols-2">
-    <RecordButton 
-      label="Start recording" 
-      variant="start" 
-      disabled={!canStart} 
-      onclick={onStart} 
-    />
-    <RecordButton 
-      label="Stop recording" 
-      variant="stop" 
-      disabled={!canStop} 
-      onclick={onStop} 
-    />
+    <RecordButton label="Start recording" variant="start" disabled={!canStart} onclick={onStart} />
+    <RecordButton label="Stop recording" variant="stop" disabled={!canStop} onclick={onStop} />
   </div>
 
   <Alert message={alert} type="error" />

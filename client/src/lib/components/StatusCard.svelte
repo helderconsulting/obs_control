@@ -1,7 +1,15 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import StatusIndicator from './StatusIndicator.svelte';
 
-  let { title, status, header, children } = $props();
+  type Props = {
+    title: string;
+    status: string;
+    header?: Snippet;
+    children?: Snippet;
+  };
+
+  let { title, status, header, children }: Props = $props();
 </script>
 
 <div

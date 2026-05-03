@@ -1,10 +1,6 @@
 import { fetchObsConnectionStatus, fetchRecording, fetchObsScenes } from '$lib/api/recording.js';
 import { connectRecordingWebSocket } from '$lib/api/recording-websocket.js';
-import type {
-  Recording,
-  RecordingCommand,
-  RecordingEvent,
-} from '../../../../shared/recording.js';
+import type { Recording, RecordingCommand, RecordingEvent } from '../../../../shared/recording.js';
 import type { ObsConnectionStatus } from '$lib/api/recording.js';
 import type { RecordingGatewayError } from '$lib/api/recording-websocket.js';
 

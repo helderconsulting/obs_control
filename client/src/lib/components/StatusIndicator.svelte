@@ -1,5 +1,9 @@
 <script lang="ts">
-  let { status = 'idle' } = $props();
+  type Props = {
+    status?: string;
+  };
+
+  let { status = 'idle' }: Props = $props();
 
   const classes: Record<string, string> = {
     recording: 'bg-orange-500 shadow-[0_0_0_6px_rgba(249,115,22,0.18)]',

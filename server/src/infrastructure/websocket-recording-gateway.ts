@@ -85,6 +85,7 @@ const createRecordingStartedEvent = (
     occurredAt,
     delta: {
       status: 'recording',
+      sceneName: recording.sceneName,
       lastRecordingFilename: recording.lastRecordingFilename,
     },
   };
@@ -101,6 +102,7 @@ const createRecordingStoppedEvent = (
     occurredAt,
     delta: {
       status: 'idle',
+      sceneName: recording.sceneName,
       lastRecordingFilename: recording.lastRecordingFilename,
     },
   };
@@ -116,7 +118,7 @@ const createRecordingSceneSwitchedEvent = (
     aggregate: 'recording',
     occurredAt,
     delta: {
-      status: 'scene-switched',
+      status: 'switching-scene',
       sceneName: recording.sceneName,
     },
   };
@@ -135,6 +137,7 @@ const createRecordingFailedEvent = (
     delta: {
       status: 'error',
       message,
+      sceneName: recording.sceneName,
       lastRecordingFilename: recording.lastRecordingFilename,
     },
   };

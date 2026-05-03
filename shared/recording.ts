@@ -31,6 +31,7 @@ export type RecordingSceneSwitching = {
 export type RecordingError = {
   status: 'error';
   message: string;
+  sceneName: string;
   lastRecordingFilename: string | null;
 };
 
@@ -63,6 +64,7 @@ export type RecordingStartedEvent = {
   occurredAt: string;
   delta: {
     status: 'recording';
+    sceneName: string;
     lastRecordingFilename: string | null;
   };
 };
@@ -73,6 +75,7 @@ export type RecordingStoppedEvent = {
   occurredAt: string;
   delta: {
     status: 'idle';
+    sceneName: string;
     lastRecordingFilename: string | null;
   };
 };
@@ -80,7 +83,7 @@ export type RecordingStoppedEvent = {
 export type RecordingSceneSwitchedEvent = {
   type: 'recording.scene-switched';
   aggregate: 'recording';
-  occuredAt: string;
+  occurredAt: string;
   delta: {
     status: 'switching-scene';
     sceneName: string;
@@ -94,6 +97,7 @@ export type RecordingFailedEvent = {
   delta: {
     status: 'error';
     message: string;
+    sceneName: string;
     lastRecordingFilename: string | null;
   };
 };

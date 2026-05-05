@@ -1,47 +1,21 @@
 import OBSWebSocket, { type OBSRequestTypes, type OBSResponseTypes } from 'obs-websocket-js';
 import type { AppLogger } from './recording-logger.js';
 import type { JSONObject } from 'hono/utils/types';
+import type {
+  RemoteRecording,
+  CheckRemoteConnection,
+  RemoteConnectionStatus,
+  RemoteRecordingStatus,
+  GetRemoteConnectionStatus,
+  GetRemoteRecordingStatus,
+  StartRemoteRecording,
+  StopRemoteRecording,
+  GetActiveRemoteScene,
+  GetRemoteScenes,
+  SwitchRemoteScene,
+} from '../application/recording-control.js';
 
-export type StopObsRecordingResult = {
-  recordingFilename: string | null;
-};
-export type ObsRecordingStatus = {
-  outputActive: boolean;
-};
-
-export type StartRecording = () => Promise<void>;
-export type StopRecording = () => Promise<StopObsRecordingResult>;
-export type CheckObsConnection = () => Promise<void>;
-export type GetObsConnectionStatus = () => ObsConnectionStatus;
-export type GetObsRecordingStatus = () => Promise<ObsRecordingStatus>;
-export type GetObsScenes = () => Promise<string[]>;
-export type GetActiveObsScene = () => Promise<string>;
-export type SwitchObsScene = (name: string) => Promise<void>;
-
-export type ObsConnectionStatus =
-  | {
-      status: 'connected';
-      url: string;
-      checkedAt: string;
-      message: string;
-    }
-  | {
-      status: 'disconnected';
-      url: string;
-      checkedAt: string | null;
-      message: string;
-    };
-
-export type ObsRecordingAdapter = {
-  checkConnection: CheckObsConnection;
-  getStatus: GetObsConnectionStatus;
-  getRecordingStatus: GetObsRecordingStatus;
-  startRecording: StartRecording;
-  stopRecording: StopRecording;
-  getScenes: GetObsScenes;
-  getActiveScene: GetActiveObsScene;
-  switchScene: SwitchObsScene;
-};
+export type ObsRecordingAdapter = RemoteRecording;
 
 export type ObsRecordingAdapterConfig = {
   url: string;
@@ -58,8 +32,8 @@ export type ObsRecordingAdapterDeps = {
 
 type ManagedObsConnection = {
   connect: () => Promise<void>;
-  getStatus: () => ObsConnectionStatus;
-  getRecordingStatus: () => Promise<ObsRecordingStatus>;
+  getStatus: () => RemoteConnectionStatus;
+  getRecordingStatus: () => Promise<RemoteRecordingStatus>;
   call: <RequestType extends keyof OBSRequestTypes>(
     requestType: RequestType,
     requestData?: OBSRequestTypes[RequestType],
@@ -123,7 +97,7 @@ const createManagedObsConnection = (deps: ObsRecordingAdapterDeps): ManagedObsCo
   let client: OBSWebSocket | null = null;
   let connectPromise: Promise<OBSWebSocket> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let status: ObsConnectionStatus = {
+  let status: RemoteConnectionStatus = {
     status: 'disconnected',
     url: deps.config.url,
     checkedAt: null,
@@ -322,7 +296,7 @@ const createManagedObsConnection = (deps: ObsRecordingAdapterDeps): ManagedObsCo
 export const createCheckConnection = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): CheckObsConnection => {
+): CheckRemoteConnection => {
   return async () => {
     logger.info('Checking OBS websocket connection.');
     await connection.connect();
@@ -330,14 +304,14 @@ export const createCheckConnection = (
   };
 };
 
-export const createGetStatus = (connection: ManagedObsConnection): GetObsConnectionStatus => {
+export const createGetStatus = (connection: ManagedObsConnection): GetRemoteConnectionStatus => {
   return () => connection.getStatus();
 };
 
 export const createGetRecordingStatus = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): GetObsRecordingStatus => {
+): GetRemoteRecordingStatus => {
   return async () => {
     logger.info('Fetching OBS recording status.');
     return connection.getRecordingStatus();
@@ -347,7 +321,7 @@ export const createGetRecordingStatus = (
 export const createStartRecording = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): StartRecording => {
+): StartRemoteRecording => {
   return async () => {
     logger.info('Sending OBS start recording command.');
     await connection.call('StartRecord');
@@ -358,7 +332,7 @@ export const createStartRecording = (
 export const createStopRecording = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): StopRecording => {
+): StopRemoteRecording => {
   return async () => {
     logger.info('Sending OBS stop recording command.');
     const response = await connection.call('StopRecord');
@@ -372,7 +346,7 @@ export const createStopRecording = (
 export const createGetActiveScene = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): GetActiveObsScene => {
+): GetActiveRemoteScene => {
   return async () => {
     logger.info('Fetching the active scene');
     const response = await connection.call('GetCurrentProgramScene');
@@ -384,7 +358,7 @@ export const createGetActiveScene = (
 export const createGetScenes = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): GetObsScenes => {
+): GetRemoteScenes => {
   return async () => {
     logger.info('Fetching OBS scenes');
     const response = await connection.call('GetSceneList');
@@ -397,7 +371,7 @@ export const createGetScenes = (
 export const createSwitchScene = (
   connection: ManagedObsConnection,
   logger: AppLogger,
-): SwitchObsScene => {
+): SwitchRemoteScene => {
   return async (name: string) => {
     logger.info({ name }, 'Switching OBS scene');
     if (!name) {

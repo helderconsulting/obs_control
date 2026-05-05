@@ -3,14 +3,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import type { Recording } from '../../../shared/recording.js';
 import {
-  createIdleRecording,
   createIdleRecordingWithFilename,
   createRecording,
   createRecordingError,
   createStartingRecording,
   createStoppingRecording,
+  type RecordingRepository,
+  createIdleRecording,
 } from '../domain/recording.js';
-import type { RecordingRepository } from '../application/recording-control.js';
 import type { AppLogger } from './recording-logger.js';
 
 const recordingsDirectory = join(process.cwd(), '.recordings');

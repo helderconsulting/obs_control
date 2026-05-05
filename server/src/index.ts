@@ -73,21 +73,17 @@ export const createServerApp = (config: ServerConfig): Hono => {
   });
   const readRecording = createReadRecordingService({
     recordingRepository,
-    getObsRecordingStatus: obsRecordingAdapter.getRecordingStatus,
+    remoteRecording: obsRecordingAdapter,
     logger,
   });
   const issueRecordingCommand = createIssueRecordingCommandService({
     recordingRepository,
-    startObsRecording: obsRecordingAdapter.startRecording,
-    stopObsRecording: obsRecordingAdapter.stopRecording,
-    switchObsScene: obsRecordingAdapter.switchScene,
-    getActiveObsScene: obsRecordingAdapter.getActiveScene,
+    remoteRecording: obsRecordingAdapter,
     logger,
   });
   const recordingController = createRecordingController({
     readRecording,
-    getObsConnectionStatus: obsRecordingAdapter.getStatus,
-    getObsScenes: obsRecordingAdapter.getScenes,
+    remoteRecording: obsRecordingAdapter,
     logger: controllerLogger,
   });
   const websocketRecordingGateway = createWebsocketRecordingGateway({

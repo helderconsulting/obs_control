@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
-import type { ReadRecordingService } from '../application/recording-control.js';
+import type { ReadRecordingService, RemoteRecording } from '../application/recording-control.js';
 import { mapRecordingErrorToResponse } from './recording-error-response.js';
 import type { AppLogger } from './recording-logger.js';
-import type { GetObsConnectionStatus, GetObsScenes } from './obs-recording-adapter.js';
 
 export type RecordingControllerEnv = {
   Bindings: Record<string, never>;
@@ -13,8 +12,7 @@ export type RecordingControllerEnv = {
 
 export type RecordingControllerDeps = {
   readRecording: ReadRecordingService;
-  getObsConnectionStatus: GetObsConnectionStatus;
-  getObsScenes: GetObsScenes;
+  remoteRecording: RemoteRecording;
   logger: AppLogger;
 };
 
@@ -46,7 +44,7 @@ export const createRecordingController = (
     deps.logger.debug('Handling GET /obs/scenes request.');
 
     try {
-      const scenes = await deps.getObsScenes();
+      const scenes = await deps.remoteRecording.getScenes();
       deps.logger.info({ scenes }, 'Handled GET /obs/scenes request.');
 
       return context.json(scenes, 200);
@@ -62,7 +60,7 @@ export const createRecordingController = (
   });
 
   app.get('/obs/connection', (context) => {
-    const status = deps.getObsConnectionStatus();
+    const status = deps.remoteRecording.getStatus();
     deps.logger.info({ status: status.status }, 'Handled GET /obs/connection request.');
 
     return context.json(status, 200);
@@ -70,3 +68,4 @@ export const createRecordingController = (
 
   return app;
 };
+

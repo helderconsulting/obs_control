@@ -11,6 +11,7 @@ import {
   canSwitchScene,
   createIdleRecordingWithFilename,
   createRecording,
+  type RecordingRepository,
 } from '../domain/recording.js';
 import {
   RecordingNotFoundError,
@@ -18,20 +19,53 @@ import {
   RecordingUnknownCommandError,
 } from './recording-control-errors.js';
 import type { AppLogger } from '../infrastructure/recording-logger.js';
-import type { GetActiveObsScene, SwitchObsScene } from '../infrastructure/obs-recording-adapter.js';
 
-export type FindRecording = () => Promise<Recording | undefined>;
+export type RemoteStopRecordingResult = {
+  recordingFilename: string | null;
+};
 
-export type SaveRecording = (recording: Recording) => Promise<void>;
+export type RemoteRecordingStatus = {
+  outputActive: boolean;
+};
 
-export type RecordingRepository = {
-  findRecording: FindRecording;
-  saveRecording: SaveRecording;
+export type StartRemoteRecording = () => Promise<void>;
+export type StopRemoteRecording = () => Promise<RemoteStopRecordingResult>;
+export type GetRemoteRecordingStatus = () => Promise<RemoteRecordingStatus>;
+export type GetRemoteScenes = () => Promise<string[]>;
+export type GetActiveRemoteScene = () => Promise<string>;
+export type SwitchRemoteScene = (name: string) => Promise<void>;
+export type CheckRemoteConnection = () => Promise<void>;
+
+export type RemoteConnectionStatus =
+  | {
+      status: 'connected';
+      url: string;
+      checkedAt: string;
+      message: string;
+    }
+  | {
+      status: 'disconnected';
+      url: string;
+      checkedAt: string | null;
+      message: string;
+    };
+
+export type GetRemoteConnectionStatus = () => RemoteConnectionStatus;
+
+export type RemoteRecording = {
+  getRecordingStatus: GetRemoteRecordingStatus;
+  startRecording: StartRemoteRecording;
+  stopRecording: StopRemoteRecording;
+  getScenes: GetRemoteScenes;
+  getActiveScene: GetActiveRemoteScene;
+  switchScene: SwitchRemoteScene;
+  getStatus: GetRemoteConnectionStatus;
+  checkConnection: CheckRemoteConnection;
 };
 
 export type ReadRecordingServiceDeps = {
   recordingRepository: RecordingRepository;
-  getObsRecordingStatus: () => Promise<{ outputActive: boolean }>;
+  remoteRecording: RemoteRecording;
   logger: AppLogger;
 };
 
@@ -52,8 +86,8 @@ export const createReadRecordingService = (
       let recording = storedRecording;
 
       try {
-        const obsRecordingStatus = await deps.getObsRecordingStatus();
-        const normalizedRecording = obsRecordingStatus.outputActive
+        const remoteRecordingStatus = await deps.remoteRecording.getRecordingStatus();
+        const normalizedRecording = remoteRecordingStatus.outputActive
           ? createRecording(storedRecording.sceneName, storedRecording.lastRecordingFilename)
           : createIdleRecordingWithFilename(
               storedRecording.sceneName,
@@ -71,14 +105,14 @@ export const createReadRecordingService = (
               persistedStatus: storedRecording.status,
               normalizedStatus: recording.status,
             },
-            'Normalized persisted recording state against OBS.',
+            'Normalized persisted recording state against remote system.',
           );
           await deps.recordingRepository.saveRecording(recording);
         }
       } catch (error: unknown) {
         deps.logger.warn(
           { error, persistedStatus: storedRecording.status },
-          'Unable to reconcile persisted recording state against OBS. Returning stored state.',
+          'Unable to reconcile persisted recording state against remote system. Returning stored state.',
         );
       }
 
@@ -98,10 +132,6 @@ export const createReadRecordingService = (
   };
 };
 
-export type StartObsRecording = () => Promise<void>;
-
-export type StopObsRecording = () => Promise<{ recordingFilename: string | null }>;
-
 export type IssueRecordingCommandResult = {
   recording: Recording;
   changed: boolean;
@@ -114,19 +144,16 @@ export type IssueRecordingCommandService = (
 
 export type IssueRecordingCommandServiceDeps = {
   recordingRepository: RecordingRepository;
-  startObsRecording: StartObsRecording;
-  stopObsRecording: StopObsRecording;
-  switchObsScene: SwitchObsScene;
-  getActiveObsScene: GetActiveObsScene;
+  remoteRecording: RemoteRecording;
   logger: AppLogger;
 };
 
 const mapStartRecordingFailureMessage = (): string => {
-  return 'Unable to start recording because OBS is unavailable.';
+  return 'Unable to start recording because remote system is unavailable.';
 };
 
 const mapStopRecordingFailureMessage = (): string => {
-  return 'Unable to stop recording because OBS is unavailable.';
+  return 'Unable to stop recording because remote system is unavailable.';
 };
 
 const issueStartCommand = async (
@@ -150,18 +177,18 @@ const issueStartCommand = async (
     };
   }
 
-  const activeScene = await deps.getActiveObsScene();
+  const activeScene = await deps.remoteRecording.getActiveScene();
   currentRecording.sceneName = activeScene;
   const startingRecording = beginStartingRecording(currentRecording);
   deps.logger.debug('Persisting starting recording state.');
   await deps.recordingRepository.saveRecording(startingRecording);
 
   try {
-    deps.logger.debug('Sending start recording command to OBS.');
-    await deps.startObsRecording();
+    deps.logger.debug('Sending start recording command to remote system.');
+    await deps.remoteRecording.startRecording();
     const recording = applyRecordingStarted(startingRecording);
 
-    deps.logger.info('OBS recording started.');
+    deps.logger.info('Remote recording started.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {
@@ -173,7 +200,7 @@ const issueStartCommand = async (
     const message = mapStartRecordingFailureMessage();
     const recording = applyRecordingFailed(message, startingRecording);
 
-    deps.logger.error({ error }, 'OBS start recording command failed.');
+    deps.logger.error({ error }, 'Remote start recording command failed.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {
@@ -210,11 +237,11 @@ const issueStopCommand = async (
   await deps.recordingRepository.saveRecording(stoppingRecording);
 
   try {
-    deps.logger.debug('Sending stop recording command to OBS.');
-    const { recordingFilename } = await deps.stopObsRecording();
+    deps.logger.debug('Sending stop recording command to remote system.');
+    const { recordingFilename } = await deps.remoteRecording.stopRecording();
     const recording = applyRecordingStopped(stoppingRecording.sceneName, recordingFilename);
 
-    deps.logger.info('OBS recording stopped.');
+    deps.logger.info('Remote recording stopped.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {
@@ -226,7 +253,7 @@ const issueStopCommand = async (
     const message = mapStopRecordingFailureMessage();
     const recording = applyRecordingFailed(message, stoppingRecording);
 
-    deps.logger.error({ error }, 'OBS stop recording command failed.');
+    deps.logger.error({ error }, 'Remote stop recording command failed.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {
@@ -259,11 +286,11 @@ const issueSwitchSceneCommand = async (
   }
 
   try {
-    deps.logger.debug('Sending switching scene command to OBS.');
-    await deps.switchObsScene(sceneName);
+    deps.logger.debug('Sending switching scene command to remote system.');
+    await deps.remoteRecording.switchScene(sceneName);
     const recording = applyRecordingSceneSwitch(sceneName, currentRecording.lastRecordingFilename);
 
-    deps.logger.info('OBS scene switched.');
+    deps.logger.info('Remote scene switched.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {
@@ -275,7 +302,7 @@ const issueSwitchSceneCommand = async (
     const message = mapStopRecordingFailureMessage();
     const recording = applyRecordingFailed(message, currentRecording);
 
-    deps.logger.error({ error }, 'OBS switching scene command failed.');
+    deps.logger.error({ error }, 'Remote switching scene command failed.');
     await deps.recordingRepository.saveRecording(recording);
 
     return {

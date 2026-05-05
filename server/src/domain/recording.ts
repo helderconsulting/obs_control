@@ -108,3 +108,12 @@ export const applyRecordingSceneSwitch = (
 
 export const applyRecordingFailed = (message: string, recording: Recording): Recording =>
   createRecordingError(message, recording.sceneName, recording.lastRecordingFilename);
+
+export type FindRecording = () => Promise<Recording | undefined>;
+
+export type SaveRecording = (recording: Recording) => Promise<void>;
+
+export type RecordingRepository = {
+  findRecording: FindRecording;
+  saveRecording: SaveRecording;
+};

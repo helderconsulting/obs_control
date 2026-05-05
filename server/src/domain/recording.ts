@@ -71,11 +71,12 @@ export const createRecordingError = (
 });
 
 export const canStartRecording = (recording: Recording): boolean =>
-  recording.status === 'idle' || recording.status === 'error';
+  recording.status === 'idle' || recording.status === 'error' || recording.status === 'switching-scene';
 
 export const canStopRecording = (recording: Recording): boolean => recording.status === 'recording';
 
-export const canSwitchScene = (recording: Recording): boolean => recording.status === 'idle';
+export const canSwitchScene = (recording: Recording): boolean =>
+  recording.status === 'idle' || recording.status === 'error' || recording.status === 'switching-scene';
 
 export const beginStartingRecording = (recording: Recording): Recording => {
   if (!canStartRecording(recording)) {
@@ -93,6 +94,14 @@ export const beginStoppingRecording = (recording: Recording): Recording => {
   return createStoppingRecording(recording.sceneName, recording.lastRecordingFilename);
 };
 
+export const beginSwitchingScene = (recording: Recording, sceneName: string): Recording => {
+  if (!canSwitchScene(recording)) {
+    return recording;
+  }
+
+  return createSwitchingSceneRecording(sceneName, recording.lastRecordingFilename);
+};
+
 export const applyRecordingStarted = (recording: Recording): Recording =>
   createRecording(recording.sceneName, recording.lastRecordingFilename);
 
@@ -104,7 +113,7 @@ export const applyRecordingStopped = (
 export const applyRecordingSceneSwitch = (
   sceneName: string,
   lastRecordingFilename: string | null,
-): Recording => createSwitchingSceneRecording(sceneName, lastRecordingFilename);
+): Recording => createIdleRecordingWithFilename(sceneName, lastRecordingFilename);
 
 export const applyRecordingFailed = (message: string, recording: Recording): Recording =>
   createRecordingError(message, recording.sceneName, recording.lastRecordingFilename);

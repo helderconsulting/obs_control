@@ -1,4 +1,12 @@
-import type { Recording, RecordingCommand } from '../../../shared/recording.js';
+import type {
+  Recording,
+  RecordingCommand,
+  RecordingEvent,
+  RecordingFailedEvent,
+  RecordingSceneSwitchedEvent,
+  RecordingStartedEvent,
+  RecordingStoppedEvent,
+} from '../../../shared/recording.js';
 import {
   applyRecordingFailed,
   applyRecordingSceneSwitch,
@@ -6,6 +14,7 @@ import {
   applyRecordingStopped,
   beginStartingRecording,
   beginStoppingRecording,
+  beginSwitchingScene,
   canStartRecording,
   canStopRecording,
   canSwitchScene,
@@ -136,6 +145,7 @@ export type IssueRecordingCommandResult = {
   recording: Recording;
   changed: boolean;
   rejectedMessage: string | null;
+  event: RecordingEvent | null;
 };
 
 export type IssueRecordingCommandService = (
@@ -156,6 +166,59 @@ const mapStopRecordingFailureMessage = (): string => {
   return 'Unable to stop recording because remote system is unavailable.';
 };
 
+const createRecordingStartedEvent = (
+  recording: Extract<Recording, { status: 'recording' }>,
+): RecordingStartedEvent => ({
+  type: 'recording.started',
+  aggregate: 'recording',
+  occurredAt: new Date().toISOString(),
+  delta: {
+    status: 'recording',
+    sceneName: recording.sceneName,
+    lastRecordingFilename: recording.lastRecordingFilename,
+  },
+});
+
+const createRecordingStoppedEvent = (
+  recording: Extract<Recording, { status: 'idle' }>,
+): RecordingStoppedEvent => ({
+  type: 'recording.stopped',
+  aggregate: 'recording',
+  occurredAt: new Date().toISOString(),
+  delta: {
+    status: 'idle',
+    sceneName: recording.sceneName,
+    lastRecordingFilename: recording.lastRecordingFilename,
+  },
+});
+
+const createRecordingSceneSwitchedEvent = (
+  recording: Extract<Recording, { status: 'idle' }>,
+): RecordingSceneSwitchedEvent => ({
+  type: 'recording.scene-switched',
+  aggregate: 'recording',
+  occurredAt: new Date().toISOString(),
+  delta: {
+    status: 'idle',
+    sceneName: recording.sceneName,
+    lastRecordingFilename: recording.lastRecordingFilename,
+  },
+});
+
+const createRecordingFailedEvent = (
+  recording: Extract<Recording, { status: 'error' }>,
+): RecordingFailedEvent => ({
+  type: 'recording.failed',
+  aggregate: 'recording',
+  occurredAt: new Date().toISOString(),
+  delta: {
+    status: 'error',
+    message: recording.message,
+    sceneName: recording.sceneName,
+    lastRecordingFilename: recording.lastRecordingFilename,
+  },
+});
+
 const issueStartCommand = async (
   deps: IssueRecordingCommandServiceDeps,
 ): Promise<IssueRecordingCommandResult> => {
@@ -174,6 +237,7 @@ const issueStartCommand = async (
       recording: currentRecording,
       changed: false,
       rejectedMessage: 'Recording is already active.',
+      event: null,
     };
   }
 
@@ -186,7 +250,7 @@ const issueStartCommand = async (
   try {
     deps.logger.debug('Sending start recording command to remote system.');
     await deps.remoteRecording.startRecording();
-    const recording = applyRecordingStarted(startingRecording);
+    const recording = applyRecordingStarted(startingRecording) as Extract<Recording, { status: 'recording' }>;
 
     deps.logger.info('Remote recording started.');
     await deps.recordingRepository.saveRecording(recording);
@@ -195,10 +259,11 @@ const issueStartCommand = async (
       recording,
       changed: true,
       rejectedMessage: null,
+      event: createRecordingStartedEvent(recording),
     };
   } catch (error: unknown) {
     const message = mapStartRecordingFailureMessage();
-    const recording = applyRecordingFailed(message, startingRecording);
+    const recording = applyRecordingFailed(message, startingRecording) as Extract<Recording, { status: 'error' }>;
 
     deps.logger.error({ error }, 'Remote start recording command failed.');
     await deps.recordingRepository.saveRecording(recording);
@@ -207,6 +272,7 @@ const issueStartCommand = async (
       recording,
       changed: false,
       rejectedMessage: null,
+      event: createRecordingFailedEvent(recording),
     };
   }
 };
@@ -229,6 +295,7 @@ const issueStopCommand = async (
       recording: currentRecording,
       changed: false,
       rejectedMessage: 'Recording is not active.',
+      event: null,
     };
   }
 
@@ -239,7 +306,7 @@ const issueStopCommand = async (
   try {
     deps.logger.debug('Sending stop recording command to remote system.');
     const { recordingFilename } = await deps.remoteRecording.stopRecording();
-    const recording = applyRecordingStopped(stoppingRecording.sceneName, recordingFilename);
+    const recording = applyRecordingStopped(stoppingRecording.sceneName, recordingFilename) as Extract<Recording, { status: 'idle' }>;
 
     deps.logger.info('Remote recording stopped.');
     await deps.recordingRepository.saveRecording(recording);
@@ -248,10 +315,11 @@ const issueStopCommand = async (
       recording,
       changed: true,
       rejectedMessage: null,
+      event: createRecordingStoppedEvent(recording),
     };
   } catch (error: unknown) {
     const message = mapStopRecordingFailureMessage();
-    const recording = applyRecordingFailed(message, stoppingRecording);
+    const recording = applyRecordingFailed(message, stoppingRecording) as Extract<Recording, { status: 'error' }>;
 
     deps.logger.error({ error }, 'Remote stop recording command failed.');
     await deps.recordingRepository.saveRecording(recording);
@@ -260,6 +328,7 @@ const issueStopCommand = async (
       recording,
       changed: false,
       rejectedMessage: null,
+      event: createRecordingFailedEvent(recording),
     };
   }
 };
@@ -282,13 +351,18 @@ const issueSwitchSceneCommand = async (
       recording: currentRecording,
       changed: false,
       rejectedMessage: 'Recording is not idle.',
+      event: null,
     };
   }
+
+  const switchingRecording = beginSwitchingScene(currentRecording, sceneName);
+  deps.logger.debug('Persisting switching scene state.');
+  await deps.recordingRepository.saveRecording(switchingRecording);
 
   try {
     deps.logger.debug('Sending switching scene command to remote system.');
     await deps.remoteRecording.switchScene(sceneName);
-    const recording = applyRecordingSceneSwitch(sceneName, currentRecording.lastRecordingFilename);
+    const recording = applyRecordingSceneSwitch(sceneName, currentRecording.lastRecordingFilename) as Extract<Recording, { status: 'idle' }>;
 
     deps.logger.info('Remote scene switched.');
     await deps.recordingRepository.saveRecording(recording);
@@ -297,10 +371,11 @@ const issueSwitchSceneCommand = async (
       recording,
       changed: true,
       rejectedMessage: null,
+      event: createRecordingSceneSwitchedEvent(recording),
     };
   } catch (error: unknown) {
     const message = mapStopRecordingFailureMessage();
-    const recording = applyRecordingFailed(message, currentRecording);
+    const recording = applyRecordingFailed(message, currentRecording) as Extract<Recording, { status: 'error' }>;
 
     deps.logger.error({ error }, 'Remote switching scene command failed.');
     await deps.recordingRepository.saveRecording(recording);
@@ -309,6 +384,7 @@ const issueSwitchSceneCommand = async (
       recording,
       changed: false,
       rejectedMessage: null,
+      event: createRecordingFailedEvent(recording),
     };
   }
 };

@@ -3,13 +3,8 @@ import { Hono } from 'hono';
 import type { WSContext } from 'hono/ws';
 import { z } from 'zod';
 import type {
-  Recording,
   RecordingCommand,
   RecordingEvent,
-  RecordingFailedEvent,
-  RecordingSceneSwitchedEvent,
-  RecordingStartedEvent,
-  RecordingStoppedEvent,
 } from '../../../shared/recording.js';
 import type { IssueRecordingCommandService } from '../application/recording-control.js';
 import { mapRecordingErrorToResponse } from './recording-error-response.js';
@@ -76,95 +71,6 @@ const parseGatewayMessage = (
   return recordingCommandMessageSchema.parse(payload);
 };
 
-const createRecordingStartedEvent = (
-  recording: Extract<Recording, { status: 'recording' }>,
-): RecordingStartedEvent => {
-  const occurredAt = new Date().toISOString();
-
-  return {
-    type: 'recording.started',
-    aggregate: 'recording',
-    occurredAt,
-    delta: {
-      status: 'recording',
-      sceneName: recording.sceneName,
-      lastRecordingFilename: recording.lastRecordingFilename,
-    },
-  };
-};
-
-const createRecordingStoppedEvent = (
-  recording: Extract<Recording, { status: 'idle' }>,
-): RecordingStoppedEvent => {
-  const occurredAt = new Date().toISOString();
-
-  return {
-    type: 'recording.stopped',
-    aggregate: 'recording',
-    occurredAt,
-    delta: {
-      status: 'idle',
-      sceneName: recording.sceneName,
-      lastRecordingFilename: recording.lastRecordingFilename,
-    },
-  };
-};
-
-const createRecordingSceneSwitchedEvent = (
-  recording: Extract<Recording, { status: 'switching-scene' }>,
-): RecordingSceneSwitchedEvent => {
-  const occurredAt = new Date().toISOString();
-
-  return {
-    type: 'recording.scene-switched',
-    aggregate: 'recording',
-    occurredAt,
-    delta: {
-      status: 'switching-scene',
-      sceneName: recording.sceneName,
-    },
-  };
-};
-
-const createRecordingFailedEvent = (
-  recording: Extract<Recording, { status: 'error' }>,
-): RecordingFailedEvent => {
-  const occurredAt = new Date().toISOString();
-  const message = recording.message;
-
-  return {
-    type: 'recording.failed',
-    aggregate: 'recording',
-    occurredAt,
-    delta: {
-      status: 'error',
-      message,
-      sceneName: recording.sceneName,
-      lastRecordingFilename: recording.lastRecordingFilename,
-    },
-  };
-};
-
-const createRecordingEvent = (recording: Recording): RecordingEvent | null => {
-  if (recording.status === 'recording') {
-    return createRecordingStartedEvent(recording);
-  }
-
-  if (recording.status === 'switching-scene') {
-    return createRecordingSceneSwitchedEvent(recording);
-  }
-
-  if (recording.status === 'error') {
-    return createRecordingFailedEvent(recording);
-  }
-
-  if (recording.status === 'idle') {
-    return createRecordingStoppedEvent(recording);
-  }
-
-  return null;
-};
-
 const createGatewayErrorMessage = (error: unknown): RecordingGatewayErrorMessage => {
   const response = mapRecordingErrorToResponse(error);
   const errorBody = response.body.error;
@@ -229,17 +135,14 @@ const handleRecordingCommand = async (
       return;
     }
 
-    const event = createRecordingEvent(result.recording);
-
-    if (event === null) {
+    if (result.event !== null) {
+      broadcastJsonMessage(sockets, result.event);
+    } else {
       deps.logger.debug(
         { status: result.recording.status },
         'Skipping websocket broadcast for transitional recording state.',
       );
-      return;
     }
-
-    broadcastJsonMessage(sockets, event);
   } catch (error: unknown) {
     deps.logger.error({ error, commandType: command.type }, 'Recording websocket command failed.');
 

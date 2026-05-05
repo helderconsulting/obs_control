@@ -85,8 +85,9 @@ export type RecordingSceneSwitchedEvent = {
   aggregate: 'recording';
   occurredAt: string;
   delta: {
-    status: 'switching-scene';
+    status: 'idle';
     sceneName: string;
+    lastRecordingFilename: string | null;
   };
 };
 

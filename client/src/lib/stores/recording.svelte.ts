@@ -101,9 +101,9 @@ export class RecordingState {
 
     if (event.type === 'recording.scene-switched') {
       this.recording = {
-        status: 'switching-scene',
+        status: 'idle',
         sceneName: event.delta.sceneName,
-        lastRecordingFilename: this.recording.lastRecordingFilename,
+        lastRecordingFilename: event.delta.lastRecordingFilename,
       };
       this.connectionError = '';
       return;

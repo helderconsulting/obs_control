@@ -52,7 +52,9 @@ const createInvalidRequestMessage = (details: unknown): RecordingGatewayErrorMes
 
 export type RecordingWebSocketGatewayEnv = {
   Bindings: Record<string, never>;
-  Variables: Record<string, never>;
+  Variables: {
+    trace_id: string;
+  };
 };
 
 export type RecordingWebSocketGatewayDeps = {

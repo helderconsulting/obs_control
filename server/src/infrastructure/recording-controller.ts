@@ -6,7 +6,9 @@ import type { GetObsConnectionStatus, GetObsScenes } from './obs-recording-adapt
 
 export type RecordingControllerEnv = {
   Bindings: Record<string, never>;
-  Variables: Record<string, never>;
+  Variables: {
+    trace_id: string;
+  };
 };
 
 export type RecordingControllerDeps = {

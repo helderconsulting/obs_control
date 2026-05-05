@@ -7,7 +7,7 @@ import {
 } from './application/recording-control.js';
 import { createObsRecordingAdapter } from './infrastructure/obs-recording-adapter.js';
 import { createRecordingController } from './infrastructure/recording-controller.js';
-import { rootLogger } from './infrastructure/recording-logger.js';
+import { rootLogger, traceMiddleware } from './infrastructure/recording-logger.js';
 import { createSqliteRecordingRepository } from './infrastructure/sqlite-recording-repository.js';
 import { createWebsocketRecordingGateway } from './infrastructure/websocket-recording-gateway.js';
 import { cors } from 'hono/cors';
@@ -38,6 +38,7 @@ export const createServerConfig = (): ServerConfig => {
 
 export const createServerApp = (config: ServerConfig): Hono => {
   const app = new Hono();
+  app.use('*', traceMiddleware());
   app.use(
     '/*',
     cors({
